@@ -305,17 +305,12 @@ app.post('/webhook', async (req, res) => {
                   }
 
                   // ── FOLLOW CHECK GATE ──
-                  // Since Meta's Graph API doesn't allow querying if a personal account follows you,
-                  // we use a trust-based state machine. We nudge them once, and if they click "I followed", we trust them.
                   if (rule.ask_for_follow === 1) {
                     const igUsername = user ? user.ig_username : 'subh.expp';
-                    
-                    // Check if they've already passed the follow check previously
-                    const followState = await dbHelper.getConversationState(`FOLLOW_${commenterId}`);
-                    const isFollowing = followState && followState.state === 'FOLLOWED';
+                    const isFollowing = await checkIfUserFollows(commenterId, userToken);
 
                     if (!isFollowing) {
-                      consoleLog('INFO', `@${commenterUsername} has not passed follow gate yet. Sending follow nudge.`);
+                      consoleLog('INFO', `@${commenterUsername} is not following. Sending follow nudge.`);
 
                       const followNudgeMsg = [
                         `Hey @${commenterUsername}! 👋`,
@@ -342,7 +337,7 @@ app.post('/webhook', async (req, res) => {
                       continue; // ← STOP here, do NOT send the real DM
                     }
 
-                    consoleLog('INFO', `@${commenterUsername} has passed follow check before ✅. Proceeding to send DM.`);
+                    consoleLog('INFO', `@${commenterUsername} is following ✅. Proceeding to send DM.`);
                   }
 
                   // ── EMAIL CAPTURE GATE ──
@@ -463,21 +458,37 @@ async function handleInboundDm(senderId, text, token, userId) {
 // Handle follow claim triggered by Quick Reply tap
 async function handleClaimFollowed(senderId, mediaId, token, userId) {
   try {
+    const isFollowing = await checkIfUserFollows(senderId, token);
     const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
-    
-    // Mark them as having passed the follow gate in the DB
-    await dbHelper.setConversationState(`FOLLOW_${senderId}`, 'FOLLOWED', mediaId, userId);
-    
-    const successMsg = [
-      `Awesome! Thanks for the follow! 🎉`,
-      ``,
-      `Here is your exclusive link 👇`
-    ].join('\n');
-    
     const recipient = { id: senderId };
-    await sendInstagramDmDirect(recipient, successMsg, token);
-    await sendInstagramDmDirect(recipient, rule.dm_message, token);
-    await dbHelper.logAutomationRun(mediaId, senderId, '[Claimed follow - Success]', 'SUCCESS', null, userId);
+
+    if (isFollowing) {
+      const successMsg = [
+        `Awesome! Thanks for the follow! 🎉`,
+        ``,
+        `Here is your exclusive link 👇`
+      ].join('\n');
+      
+      await sendInstagramDmDirect(recipient, successMsg, token);
+      await sendInstagramDmDirect(recipient, rule.dm_message, token);
+      await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow - Success]', 'SUCCESS', null, userId);
+    } else {
+      const stillNudgeMsg = [
+        `Hmm, it looks like you are not following yet! 🧐`,
+        ``,
+        `Please follow my page, then tap the button below to unlock your link!`
+      ].join('\n');
+      
+      const quickReplies = [
+        {
+          content_type: 'text',
+          title: 'I follow you! ✅',
+          payload: `CLAIM_FOLLOWED_${mediaId}`
+        }
+      ];
+      await sendInstagramDmDirect(recipient, stillNudgeMsg, token, quickReplies);
+      await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow - Failed]', 'FOLLOW_PENDING', 'User claimed follow but API returned false', userId);
+    }
   } catch (err) {
     consoleLog('ERROR', `Error handling Claim Followed: ${err.message}`);
   }
@@ -523,53 +534,19 @@ async function checkIfUserFollows(userId, token) {
   if (!userId || !token) return true; // fail-open: send DM if we can't check
 
   try {
-    // First, resolve the Instagram Business Account ID from the Page token
-    const meUrl = `https://graph.facebook.com/v20.0/me?fields=instagram_business_account{id}&access_token=${token}`;
-    const meRes = await axios.get(meUrl);
-
-    if (!meRes.data.instagram_business_account) {
-      consoleLog('WARN', 'Cannot resolve IG Business Account for follow check. Skipping check.');
-      return true; // fail-open
-    }
-
-    const igAccountId = meRes.data.instagram_business_account.id;
-
-    // Query the followers edge with a user_id filter for efficient lookup
-    const followersUrl = `https://graph.facebook.com/v20.0/${igAccountId}?fields=business_discovery.fields(followers_count)&access_token=${token}`;
-    
-    // The IG API doesn't allow direct follower lookup by user ID in all cases.
-    // Instead, we use /me/messages conversation history as a proxy:
-    // If a user has DM'd us before AND we previously sent them a follow nudge,
-    // we check again via the relationships endpoint.
-    
-    // Use the Instagram follower check approach:
-    // Try fetching the user's profile to see if we can verify the relationship
-    const userCheckUrl = `https://graph.facebook.com/v20.0/${userId}?fields=username,follows_count,follower_count&access_token=${token}`;
+    // Query the user profile with the is_user_follow_business field
+    const userCheckUrl = `https://graph.facebook.com/v20.0/${userId}?fields=username,is_user_follow_business&access_token=${token}`;
     const userRes = await axios.get(userCheckUrl);
     
-    // If we can fetch the user's data, they've interacted with our page
-    // The Instagram API for business accounts provides limited relationship data
-    // We verify by checking if we can access their profile through our token
-    if (userRes.data && userRes.data.username) {
-      consoleLog('INFO', `User profile accessible: @${userRes.data.username}. Treating as follower.`);
-      return true;
+    if (userRes.data && typeof userRes.data.is_user_follow_business !== 'undefined') {
+      const isFollowing = Boolean(userRes.data.is_user_follow_business);
+      consoleLog('INFO', `Follow status for @${userRes.data.username || userId}: ${isFollowing}`);
+      return isFollowing;
     }
 
-    return false;
+    consoleLog('WARN', `is_user_follow_business field missing in response. Defaulting to true.`);
+    return true; // fail-open
   } catch (err) {
-    // If the API call fails with a "not following" type error, return false
-    const errorData = err.response && err.response.data;
-    if (errorData && errorData.error) {
-      const errorCode = errorData.error.code;
-      const errorSubcode = errorData.error.error_subcode;
-      
-      // Error code 100 with subcode 33 = user not accessible (likely not following)
-      if (errorCode === 100) {
-        consoleLog('INFO', `User ${userId} is not accessible via API — likely not following.`);
-        return false;
-      }
-    }
-    
     consoleLog('WARN', `Follow check API error: ${err.message}. Defaulting to fail-open.`);
     return true; // fail-open: don't block DMs if the API is having issues
   }
