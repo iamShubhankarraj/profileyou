@@ -92,6 +92,11 @@ app.get('/api/diagnostics', async (req, res) => {
   });
 });
 
+// Redirect login page back to root in single-user mode
+app.get('/login.html', (req, res) => {
+  res.redirect('/');
+});
+
 // Serve Static Frontend Dashboard
 app.use(express.static(path.join(__dirname, 'public')));
 
