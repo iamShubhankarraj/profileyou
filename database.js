@@ -180,7 +180,7 @@ module.exports = {
   },
 
   getUserByPageId: async (pageId) => {
-    return dbGet(`SELECT * FROM users WHERE ig_page_id = ?`, [pageId]);
+    return dbGet(`SELECT * FROM users WHERE ig_page_id = ? OR ig_account_id = ?`, [pageId, pageId]);
   },
 
   saveUserToken: async (userId, pageId, igAccountId, igUsername, encryptedToken) => {

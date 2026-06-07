@@ -204,9 +204,9 @@ app.post('/webhook', async (req, res) => {
             if (qrPayload) {
               consoleLog('WEBHOOK', `Button tapped by Sender ID ${senderId} with payload: "${qrPayload}"`);
               
-              if (qrPayload.startsWith('CHECK_FOLLOW_AGAIN_')) {
-                const targetMediaId = qrPayload.replace('CHECK_FOLLOW_AGAIN_', '');
-                await handleCheckFollowAgain(senderId, targetMediaId, userToken, userId);
+              if (qrPayload.startsWith('CLAIM_FOLLOWED_')) {
+                const targetMediaId = qrPayload.replace('CLAIM_FOLLOWED_', '');
+                await handleClaimFollowed(senderId, targetMediaId, userToken, userId);
                 continue;
               }
               
@@ -305,13 +305,17 @@ app.post('/webhook', async (req, res) => {
                   }
 
                   // ── FOLLOW CHECK GATE ──
-                  // If follow check is enabled, verify the user actually follows before sending the DM
+                  // Since Meta's Graph API doesn't allow querying if a personal account follows you,
+                  // we use a trust-based state machine. We nudge them once, and if they click "I followed", we trust them.
                   if (rule.ask_for_follow === 1) {
                     const igUsername = user ? user.ig_username : 'subh.expp';
-                    const isFollowing = await checkIfUserFollows(commenterId, userToken);
+                    
+                    // Check if they've already passed the follow check previously
+                    const followState = await dbHelper.getConversationState(`FOLLOW_${commenterId}`);
+                    const isFollowing = followState && followState.state === 'FOLLOWED';
 
                     if (!isFollowing) {
-                      consoleLog('INFO', `@${commenterUsername} is NOT following. Sending follow nudge and gating DM.`);
+                      consoleLog('INFO', `@${commenterUsername} has not passed follow gate yet. Sending follow nudge.`);
 
                       const followNudgeMsg = [
                         `Hey @${commenterUsername}! 👋`,
@@ -321,16 +325,16 @@ app.post('/webhook', async (req, res) => {
                         `To get the exclusive link, just:`,
                         ``,
                         `1️⃣  Follow @${igUsername}`,
-                        `2️⃣  Comment "${rule.trigger_word.split(',')[0].trim()}" again on the same post`,
+                        `2️⃣  Tap the button below once you've followed!`,
                         ``,
-                        `I'll send it over instantly once you're following! ✨`
+                        `I'll send it over instantly! ✨`
                       ].join('\n');
 
                       const quickReplies = [
                         {
                           content_type: 'text',
                           title: 'I follow you! ✅',
-                          payload: `CHECK_FOLLOW_AGAIN_${mediaId}`
+                          payload: `CLAIM_FOLLOWED_${mediaId}`
                         }
                       ];
                       await sendInstagramDm(commentId, followNudgeMsg, userToken, quickReplies);
@@ -338,7 +342,7 @@ app.post('/webhook', async (req, res) => {
                       continue; // ← STOP here, do NOT send the real DM
                     }
 
-                    consoleLog('INFO', `@${commenterUsername} IS following ✅. Proceeding to send DM.`);
+                    consoleLog('INFO', `@${commenterUsername} has passed follow check before ✅. Proceeding to send DM.`);
                   }
 
                   // ── EMAIL CAPTURE GATE ──
@@ -456,42 +460,26 @@ async function handleInboundDm(senderId, text, token, userId) {
   }
 }
 
-// Handle follow verification re-check triggered by Quick Reply tap
-async function handleCheckFollowAgain(senderId, mediaId, token, userId) {
+// Handle follow claim triggered by Quick Reply tap
+async function handleClaimFollowed(senderId, mediaId, token, userId) {
   try {
-    const isFollowing = await checkIfUserFollows(senderId, token);
     const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
     
-    if (isFollowing) {
-      const successMsg = [
-        `Awesome! Thanks for the follow! 🎉`,
-        ``,
-        `Here is your exclusive link 👇`
-      ].join('\n');
-      
-      const recipient = { id: senderId };
-      await sendInstagramDmDirect(recipient, successMsg, token);
-      await sendInstagramDmDirect(recipient, rule.dm_message, token);
-      await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow again - Success]', 'SUCCESS', null, userId);
-    } else {
-      const stillNudgeMsg = [
-        `Hmm, it looks like you are not following yet! 🧐`,
-        ``,
-        `Please follow my page to unlock your link!`
-      ].join('\n');
-      
-      const quickReplies = [
-        {
-          content_type: 'text',
-          title: 'Check again! 🔄',
-          payload: `CHECK_FOLLOW_AGAIN_${mediaId}`
-        }
-      ];
-      const recipient = { id: senderId };
-      await sendInstagramDmDirect(recipient, stillNudgeMsg, token, quickReplies);
-    }
+    // Mark them as having passed the follow gate in the DB
+    await dbHelper.setConversationState(`FOLLOW_${senderId}`, 'FOLLOWED', mediaId, userId);
+    
+    const successMsg = [
+      `Awesome! Thanks for the follow! 🎉`,
+      ``,
+      `Here is your exclusive link 👇`
+    ].join('\n');
+    
+    const recipient = { id: senderId };
+    await sendInstagramDmDirect(recipient, successMsg, token);
+    await sendInstagramDmDirect(recipient, rule.dm_message, token);
+    await dbHelper.logAutomationRun(mediaId, senderId, '[Claimed follow - Success]', 'SUCCESS', null, userId);
   } catch (err) {
-    consoleLog('ERROR', `Error handling Check Follow Again: ${err.message}`);
+    consoleLog('ERROR', `Error handling Claim Followed: ${err.message}`);
   }
 }
 
