@@ -164,11 +164,54 @@ app.post('/webhook', async (req, res) => {
         // Fallback to User ID 1 if no specific user is resolved (since we disabled authentication)
         const userId = user ? user.id : 1;
 
-        // 1. Handle Inbound DMs (for email capture workflow)
+        // 1. Handle Inbound DMs (for Story Mentions, Quick Replies, and Email Capture)
         if (entry.messaging && Array.isArray(entry.messaging)) {
           for (const msgEvent of entry.messaging) {
             const senderId = msgEvent.sender ? msgEvent.sender.id : null;
             const message = msgEvent.message;
+            
+            // A. Detect Story Mentions (User tags us in their Story)
+            const attachments = message ? message.attachments : null;
+            const isStoryMention = attachments && attachments.some(a => a.type === 'story_mention');
+            
+            if (isStoryMention) {
+              consoleLog('WEBHOOK', `Story mention detected from Sender ID ${senderId}!`);
+              const rule = await dbHelper.getAutomationForMedia('DEFAULT', userId);
+              if (rule && rule.is_active === 1) {
+                const thankMsg = [
+                  `Omg! Thank you so much for the Story mention! 🥹💖`,
+                  ``,
+                  `As a thank you, here is your exclusive link 👇`,
+                  ``,
+                  rule.dm_message
+                ].join('\n');
+                
+                const recipient = { id: senderId };
+                await sendInstagramDmDirect(recipient, thankMsg, userToken);
+                await dbHelper.logAutomationRun('STORY_MENTION', senderId, '[Tagged in Story]', 'SUCCESS', null, userId);
+              }
+              continue;
+            }
+
+            // B. Detect Quick Reply button taps
+            if (message && message.quick_reply) {
+              const qrPayload = message.quick_reply.payload;
+              consoleLog('WEBHOOK', `Quick Reply tapped by Sender ID ${senderId} with payload: "${qrPayload}"`);
+              
+              if (qrPayload.startsWith('CHECK_FOLLOW_AGAIN_')) {
+                const targetMediaId = qrPayload.replace('CHECK_FOLLOW_AGAIN_', '');
+                await handleCheckFollowAgain(senderId, targetMediaId, userToken, userId);
+                continue;
+              }
+              
+              if (qrPayload.startsWith('SKIP_EMAIL_')) {
+                const targetMediaId = qrPayload.replace('SKIP_EMAIL_', '');
+                await handleSkipEmail(senderId, targetMediaId, userToken, userId);
+                continue;
+              }
+            }
+
+            // C. Standard text messages (e.g. email or "skip")
             consoleLog('WEBHOOK', `Received direct message from Sender ID ${senderId}: "${message ? message.text : '[No Text]'}"`);
             if (senderId && message && message.text) {
               await handleInboundDm(senderId, message.text, userToken, userId);
@@ -176,9 +219,26 @@ app.post('/webhook', async (req, res) => {
           }
         }
 
-        // 2. Handle Comments
+        // 2. Handle Comments and Mentions
         if (entry.changes && Array.isArray(entry.changes)) {
           for (const change of entry.changes) {
+            if (change.field === 'mentions') {
+              const mentionData = change.value;
+              if (mentionData) {
+                const commentId = mentionData.comment_id;
+                const mentionText = mentionData.text || '';
+                const senderUsername = mentionData.sender_username || 'unknown';
+                
+                consoleLog('INFO', `@${senderUsername} mentioned you: "${mentionText}"`);
+                
+                // Fetch default rule and send a reply if mentioned in a comment
+                const rule = await dbHelper.getAutomationForMedia('DEFAULT', userId);
+                if (rule && rule.is_active === 1 && commentId) {
+                  await sendPublicCommentReply(commentId, `Thanks for tagging me! 💖 Sent you a DM.`, userToken);
+                }
+              }
+            }
+
             if (change.field === 'comments') {
               const commentData = change.value;
               if (!commentData) continue;
@@ -260,7 +320,14 @@ app.post('/webhook', async (req, res) => {
                         `I'll send it over instantly once you're following! ✨`
                       ].join('\n');
 
-                      await sendInstagramDm(commentId, followNudgeMsg, userToken);
+                      const quickReplies = [
+                        {
+                          content_type: 'text',
+                          title: 'I follow you! ✅',
+                          payload: `CHECK_FOLLOW_AGAIN_${mediaId}`
+                        }
+                      ];
+                      await sendInstagramDm(commentId, followNudgeMsg, userToken, quickReplies);
                       await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'FOLLOW_PENDING', 'Awaiting follow', userId);
                       continue; // ← STOP here, do NOT send the real DM
                     }
@@ -288,7 +355,14 @@ app.post('/webhook', async (req, res) => {
                         `📧  Just type your email`,
                         `⏩  Or type "skip" to get the link directly`,
                       ].join('\n');
-                      await sendInstagramDm(commentId, emailPrompt, userToken);
+                      const quickReplies = [
+                        {
+                          content_type: 'text',
+                          title: 'Skip & Get Link ⏩',
+                          payload: `SKIP_EMAIL_${mediaId}`
+                        }
+                      ];
+                      await sendInstagramDm(commentId, emailPrompt, userToken, quickReplies);
                     }
                   } else {
                     // ── STANDARD DM RESPONSE ──
@@ -373,6 +447,65 @@ async function handleInboundDm(senderId, text, token, userId) {
   }
 }
 
+// Handle follow verification re-check triggered by Quick Reply tap
+async function handleCheckFollowAgain(senderId, mediaId, token, userId) {
+  try {
+    const isFollowing = await checkIfUserFollows(senderId, token);
+    const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
+    
+    if (isFollowing) {
+      const successMsg = [
+        `Awesome! Thanks for the follow! 🎉`,
+        ``,
+        `Here is your exclusive link 👇`
+      ].join('\n');
+      
+      const recipient = { id: senderId };
+      await sendInstagramDmDirect(recipient, successMsg, token);
+      await sendInstagramDmDirect(recipient, rule.dm_message, token);
+      await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow again - Success]', 'SUCCESS', null, userId);
+    } else {
+      const stillNudgeMsg = [
+        `Hmm, it looks like you are not following yet! 🧐`,
+        ``,
+        `Please follow my page to unlock your link!`
+      ].join('\n');
+      
+      const quickReplies = [
+        {
+          content_type: 'text',
+          title: 'Check again! 🔄',
+          payload: `CHECK_FOLLOW_AGAIN_${mediaId}`
+        }
+      ];
+      const recipient = { id: senderId };
+      await sendInstagramDmDirect(recipient, stillNudgeMsg, token, quickReplies);
+    }
+  } catch (err) {
+    consoleLog('ERROR', `Error handling Check Follow Again: ${err.message}`);
+  }
+}
+
+// Handle skipping email collection via Quick Reply tap
+async function handleSkipEmail(senderId, mediaId, token, userId) {
+  try {
+    const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
+    await dbHelper.clearConversationState(senderId);
+    
+    const skipMsg = [
+      `No problem! Here is your link directly:`,
+      ``,
+      rule.dm_message
+    ].join('\n');
+    
+    const recipient = { id: senderId };
+    await sendInstagramDmDirect(recipient, skipMsg, token);
+    await dbHelper.logAutomationRun(mediaId, senderId, '[Email skipped via Quick Reply]', 'SUCCESS', null, userId);
+  } catch (err) {
+    consoleLog('ERROR', `Error handling Skip Email via quick reply: ${err.message}`);
+  }
+}
+
 // ─── AUXILIARY DM API SENDERS (now accept token parameter) ───
 
 // Check if a user (by IGSID) is following the creator's Instagram account
@@ -446,7 +579,7 @@ async function sendPublicCommentReply(commentId, replyText, token) {
 }
 
 // Direct DM using comment_id (first message link)
-async function sendInstagramDm(commentId, messageText, token) {
+async function sendInstagramDm(commentId, messageText, token, quickReplies = null) {
   if (!token) return false;
 
   try {
@@ -455,16 +588,19 @@ async function sendInstagramDm(commentId, messageText, token) {
       recipient: { comment_id: commentId },
       message: { text: messageText }
     };
+    if (quickReplies && Array.isArray(quickReplies)) {
+      payload.message.quick_replies = quickReplies;
+    }
     const response = await axios.post(url, payload);
     return Boolean(response.data && response.data.message_id);
   } catch (error) {
-    consoleLog('ERROR', `DM Send Failed: ${error.message}`);
+    consoleLog('ERROR', `DM Send Failed: ${error.message} - ${error.response ? JSON.stringify(error.response.data) : ''}`);
     return false;
   }
 }
 
 // Direct DM using conversation IGSID (subsequent replies)
-async function sendInstagramDmDirect(recipient, messageText, token) {
+async function sendInstagramDmDirect(recipient, messageText, token, quickReplies = null) {
   if (!token) return false;
 
   try {
@@ -473,10 +609,13 @@ async function sendInstagramDmDirect(recipient, messageText, token) {
       recipient: recipient,
       message: { text: messageText }
     };
+    if (quickReplies && Array.isArray(quickReplies)) {
+      payload.message.quick_replies = quickReplies;
+    }
     const response = await axios.post(url, payload);
     return Boolean(response.data && response.data.message_id);
   } catch (error) {
-    consoleLog('ERROR', `DM Direct Send Failed: ${error.message}`);
+    consoleLog('ERROR', `DM Direct Send Failed: ${error.message} - ${error.response ? JSON.stringify(error.response.data) : ''}`);
     return false;
   }
 }
