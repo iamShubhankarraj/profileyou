@@ -1,0 +1,2527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>profileyou — Premium Instagram DM Automation</title>
+  <link rel="icon" type="image/png" href="/profileyou_logo.png">
+  <link rel="apple-touch-icon" href="/profileyou_logo.png">
+  <!-- Google Fonts: Plus Jakarta Sans for headings, Inter for UI text, JetBrains Mono for technical codes -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-canvas: #f8fafc;
+      --bg-sidebar: #0b0f19;
+      --bg-card: #ffffff;
+      --border-color: #e2e8f0;
+      
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-dim: #94a3b8;
+      
+      --accent-purple: #84cc16;
+      --accent-purple-light: rgba(132, 204, 22, 0.08);
+      --accent-purple-hover: #65a30d;
+      --accent-purple-gradient: linear-gradient(135deg, #84cc16 0%, #059669 100%);
+      
+      --accent-red: #ef4444;
+      --accent-red-bg: rgba(239, 68, 68, 0.08);
+      --accent-green: #10b981;
+      --accent-green-bg: rgba(16, 185, 129, 0.08);
+      --accent-yellow: #f59e0b;
+      --accent-yellow-bg: rgba(245, 158, 11, 0.08);
+      
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-heading: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+      --shadow-glow: 0 0 20px rgba(132, 204, 22, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      overflow-x: hidden;
+    }
+
+    /* ─── SIDEBAR STYLING ─── */
+    .sidebar {
+      width: 260px;
+      background-color: var(--bg-sidebar);
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 100;
+      border-right: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .brand-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 36px;
+      padding-left: 8px;
+    }
+
+    .brand-logo-container {
+      width: 32px;
+      height: 32px;
+      background: var(--accent-purple-gradient);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 12px rgba(132, 204, 22, 0.4);
+    }
+
+    .brand-name {
+      font-family: var(--font-heading);
+      font-weight: 800;
+      font-size: 19px;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+    }
+
+    .sidebar-section-header {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: rgba(255, 255, 255, 0.3);
+      margin: 20px 0 10px 8px;
+    }
+
+    .sidebar-nav-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .sidebar-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 13.5px;
+      font-weight: 500;
+      text-decoration: none;
+      border-radius: 10px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .sidebar-nav-item:hover {
+      color: #ffffff;
+      background-color: rgba(255, 255, 255, 0.04);
+    }
+
+    .sidebar-nav-item.active {
+      color: #ffffff;
+      background: rgba(132, 204, 22, 0.15);
+      border-color: rgba(132, 204, 22, 0.2);
+      font-weight: 600;
+    }
+
+    .sidebar-promo-card {
+      margin-top: auto;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .sidebar-promo-card h4 {
+      font-family: var(--font-heading);
+      color: var(--accent-green);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .sidebar-promo-card p {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+
+    .sidebar-promo-btn {
+      width: 100%;
+      background: var(--accent-green);
+      color: #0c0f17;
+      border: none;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .sidebar-promo-btn:hover {
+      opacity: 0.9;
+    }
+
+    .sidebar-user-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .sidebar-user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #84cc16;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar-user-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-user-name {
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .sidebar-user-role {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 10px;
+    }
+
+    /* ─── MAIN CONTENT AREA ─── */
+    .main-content {
+      margin-left: 260px;
+      flex-grow: 1;
+      min-height: 100vh;
+      padding: 40px 48px;
+      max-width: 1600px;
+    }
+
+    /* Header */
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .header-title-wrapper {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .dashboard-title {
+      font-family: var(--font-heading);
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      color: var(--text-primary);
+    }
+
+    .reels-count-badge {
+      background-color: var(--accent-purple-light);
+      color: var(--accent-purple);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 20px;
+      border: 1px solid rgba(132, 204, 22, 0.15);
+    }
+
+    .header-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .token-status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-dot.active {
+      background-color: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    .status-dot.inactive {
+      background-color: var(--accent-yellow);
+      box-shadow: 0 0 8px var(--accent-yellow);
+    }
+
+    /* Buttons */
+    .btn {
+      background-color: var(--text-primary);
+      color: #ffffff;
+      border: none;
+      padding: 10px 18px;
+      font-family: var(--font-heading);
+      font-weight: 600;
+      font-size: 13px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn:hover {
+      background-color: #1e293b;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary-glow {
+      background: var(--accent-purple-gradient);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(132, 204, 22, 0.25);
+    }
+
+    .btn-primary-glow:hover {
+      background: var(--accent-purple-gradient);
+      opacity: 0.95;
+      box-shadow: 0 6px 16px rgba(132, 204, 22, 0.35);
+    }
+
+    .btn-secondary {
+      background-color: #ffffff;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background-color: #f8fafc;
+      color: var(--text-primary);
+      border-color: #cbd5e1;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 11.5px;
+      border-radius: 8px;
+    }
+
+    /* ─── GROWTH PROMO BANNER ─── */
+    .growth-banner {
+      background: linear-gradient(90deg, rgba(132, 204, 22, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%);
+      border: 1px solid rgba(132, 204, 22, 0.15);
+      padding: 16px 24px;
+      border-radius: 14px;
+      margin-bottom: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .growth-banner span {
+      color: var(--text-secondary);
+    }
+
+    .growth-banner strong {
+      color: var(--accent-purple);
+      font-weight: 700;
+    }
+
+    /* ─── METRICS CARDS ─── */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 1200px) {
+      .metrics-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .metric-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .metric-label-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+    }
+
+    .metric-icon-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--accent-purple-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-purple);
+    }
+
+    .metric-value {
+      font-family: var(--font-heading);
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: var(--text-primary);
+    }
+
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .locked-badge {
+      background-color: var(--accent-purple-light);
+      color: var(--accent-purple);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .card-sparkline-svg {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 40px;
+      opacity: 0.12;
+      pointer-events: none;
+    }
+
+    /* ─── TABS & CONTROLS ─── */
+    .tabs-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 4px;
+    }
+
+    .tabs-list {
+      display: flex;
+      gap: 8px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 10px 16px;
+      font-size: 13.5px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+      background-color: #f1f5f9;
+    }
+
+    .tab-btn.active {
+      color: var(--accent-purple);
+      background-color: var(--accent-purple-light);
+    }
+
+    .tabs-right-links {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .tabs-right-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.1s ease;
+    }
+
+    .tabs-right-links a:hover {
+      color: var(--accent-purple);
+    }
+
+    /* Views */
+    .panel-view {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    .panel-view.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── PANEL 1: CAMPAIGNS VIEW ─── */
+    .campaigns-layout {
+      display: grid;
+      grid-template-columns: 1.8fr 1.2fr;
+      gap: 28px;
+    }
+
+    @media (max-width: 1100px) {
+      .campaigns-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Default rule container */
+    .default-rule-section {
+      background-color: #ffffff;
+      border: 1px solid rgba(132, 204, 22, 0.15);
+      border-left: 4px solid var(--accent-purple);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .default-rule-info h4 {
+      font-family: var(--font-heading);
+      color: var(--accent-purple);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+    }
+
+    .default-rule-info .trigger-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .default-rule-info .trigger-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    /* Table styling */
+    .campaigns-table-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .table-search-row {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      flex-grow: 1;
+      max-width: 380px;
+    }
+
+    .search-input-wrapper svg {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+    }
+
+    .search-input-wrapper input {
+      width: 100%;
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 9px 16px 9px 38px;
+      border-radius: 10px;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+
+    .search-input-wrapper input:focus {
+      background: #ffffff;
+      outline: none;
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 0 3px rgba(132, 204, 22, 0.1);
+    }
+
+    table.stark-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    table.stark-table th {
+      background: #f8fafc;
+      padding: 14px 20px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    table.stark-table td {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    table.stark-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    table.stark-table tr:hover td {
+      background-color: #f8fafc;
+    }
+
+    .reel-meta-cell {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .reel-thumbnail-container {
+      width: 52px;
+      height: 52px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .reel-thumbnail-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .reel-meta-details {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .reel-meta-details .caption {
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-width: 260px;
+    }
+
+    .reel-meta-details .handle {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .trigger-badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--accent-purple);
+      background-color: var(--accent-purple-light);
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(132, 204, 22, 0.15);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+
+    .status-badge-active {
+      background-color: var(--accent-green-bg);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .status-badge-disabled {
+      background-color: var(--accent-red-bg);
+      color: var(--accent-red);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* ─── PHONE SIMULATOR SIDEBAR ─── */
+    .simulator-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .phone-mockup {
+      border: 12px solid #0f172a;
+      border-radius: 36px;
+      background: #000000;
+      width: 100%;
+      height: 520px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .phone-notch {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 18px;
+      background: #0f172a;
+      border-bottom-left-radius: 12px;
+      border-bottom-right-radius: 12px;
+      z-index: 10;
+    }
+
+    .phone-screen {
+      background-color: #000000;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .phone-header {
+      padding: 24px 16px 10px 16px;
+      background: #0f0f15;
+      border-bottom: 1px solid #1f1f2e;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .phone-header-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #84cc16 0%, #059669 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11px;
+      color: #fff;
+    }
+
+    .phone-header-info {
+      flex-grow: 1;
+    }
+
+    .phone-header-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .phone-header-subtitle {
+      font-size: 9px;
+      color: #a1a1aa;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .phone-header-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background-color: var(--accent-green);
+    }
+
+    .phone-tabs {
+      display: flex;
+      background: #0f0f15;
+      border-bottom: 1px solid #1f1f2e;
+    }
+
+    .phone-tab {
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      color: #71717a;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .phone-tab.active {
+      color: #ffffff;
+      border-color: var(--accent-purple);
+    }
+
+    .phone-body {
+      flex-grow: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      /* custom thin scrollbar for phone mockup */
+    }
+
+    .phone-body::-webkit-scrollbar {
+      width: 4px;
+    }
+    .phone-body::-webkit-scrollbar-thumb {
+      background-color: #27272a;
+      border-radius: 20px;
+    }
+
+    /* Chat view bubbles */
+    .phone-chat-bubble {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 12px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .phone-chat-bubble.bot {
+      background-color: #27272a;
+      color: #ffffff;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+
+    .phone-chat-bubble.user {
+      background: var(--accent-purple-gradient);
+      color: #ffffff;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 2px 6px rgba(132, 204, 22, 0.15);
+    }
+
+    /* Comment feed items */
+    .phone-comment-item {
+      background-color: #0f0f15;
+      border: 1px solid #1f1f2e;
+      border-radius: 12px;
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .phone-comment-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #84cc16;
+      color: #fff;
+      font-size: 9px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .phone-comment-details {
+      flex-grow: 1;
+    }
+
+    .phone-comment-user {
+      font-weight: 700;
+      color: #ffffff;
+      font-size: 11.5px;
+      margin-bottom: 2px;
+    }
+
+    .phone-comment-text {
+      color: #e4e4e7;
+      font-size: 11.5px;
+      line-height: 1.4;
+    }
+
+    .phone-comment-date {
+      font-size: 9px;
+      color: #71717a;
+      margin-top: 4px;
+    }
+
+    .phone-footer {
+      padding: 12px;
+      border-top: 1px solid #1f1f2e;
+      background-color: #0f0f15;
+    }
+
+    .phone-input-wrapper {
+      display: flex;
+      align-items: center;
+      background-color: #000;
+      border: 1px solid #27272a;
+      border-radius: 20px;
+      padding: 4px 6px 4px 12px;
+    }
+
+    .phone-input-wrapper input {
+      flex-grow: 1;
+      background: transparent;
+      border: none;
+      color: #ffffff;
+      font-size: 12px;
+      outline: none;
+      padding: 6px 0;
+    }
+
+    .phone-input-send-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent-purple-gradient);
+      border: none;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    /* ─── PANEL 2: LEADS AUDIENCE HUB ─── */
+    .leads-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .leads-card-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .leads-avatar-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-purple-light);
+      color: var(--accent-purple);
+      font-weight: 700;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ─── PANEL 3: TELEMETRY CONSOLE ─── */
+    .console-card {
+      background-color: #0c0f17;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 14px;
+    }
+
+    .console-title-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .console-terminal-lights {
+      display: flex;
+      gap: 6px;
+    }
+
+    .console-light {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .console-light.red { background-color: #ef4444; }
+    .console-light.yellow { background-color: #f59e0b; }
+    .console-light.green { background-color: #10b981; }
+
+    .console-title {
+      font-family: var(--font-heading);
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .console-terminal-body {
+      height: 480px;
+      background-color: #05070b;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 10px;
+      padding: 20px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .console-log-line {
+      display: flex;
+      gap: 8px;
+      line-height: 1.5;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .console-log-line.SUCCESS {
+      background-color: rgba(16, 185, 129, 0.05);
+      color: #4ade80;
+      border-left: 3px solid var(--accent-green);
+    }
+
+    .console-log-line.FAILED {
+      background-color: rgba(239, 68, 68, 0.05);
+      color: #f87171;
+      border-left: 3px solid var(--accent-red);
+    }
+
+    .console-log-line.SYSTEM {
+      background-color: rgba(132, 204, 22, 0.05);
+      color: #c084fc;
+      border-left: 3px solid var(--accent-purple);
+    }
+
+    .console-log-line.INFO {
+      color: #94a3b8;
+      border-left: 3px solid #64748b;
+    }
+
+    .console-log-time {
+      color: #475569;
+      flex-shrink: 0;
+    }
+
+    /* ─── DRAWER / CONFIG MODAL ─── */
+    .drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: flex;
+      justify-content: flex-end;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .drawer-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer-panel {
+      width: 500px;
+      max-width: 100%;
+      height: 100%;
+      background: #ffffff;
+      border-left: 1px solid var(--border-color);
+      padding: 36px;
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      box-shadow: -10px 0 25px -5px rgba(0, 0, 0, 0.08);
+    }
+
+    .drawer-overlay.open .drawer-panel {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .drawer-title {
+      font-family: var(--font-heading);
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: -0.5px;
+    }
+
+    .drawer-reel-preview {
+      display: flex;
+      gap: 16px;
+      background: #f8fafc;
+      padding: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+    }
+
+    .drawer-reel-preview img {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .drawer-reel-preview-details {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .drawer-reel-id {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .drawer-reel-caption {
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      color: var(--text-primary);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      letter-spacing: 0.8px;
+    }
+
+    .form-input-help {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+      display: block;
+      line-height: 1.4;
+    }
+
+    input[type="text"], textarea, select {
+      width: 100%;
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 11px 16px;
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      border-radius: 10px;
+      transition: all 0.2s ease;
+    }
+
+    input[type="text"]:focus, textarea:focus, select:focus {
+      background: #ffffff;
+      outline: none;
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 0 3px rgba(132, 204, 22, 0.1);
+    }
+
+    textarea {
+      height: 110px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    /* Modern Toggle Switches */
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    .switch-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .switch-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .switch-desc {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+
+    .switch-toggle-input {
+      display: none;
+    }
+
+    .switch-toggle-label {
+      width: 44px;
+      height: 24px;
+      background-color: #cbd5e1;
+      border-radius: 100px;
+      position: relative;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .switch-toggle-label::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background-color: #ffffff;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .switch-toggle-input:checked + .switch-toggle-label {
+      background-color: var(--accent-purple);
+    }
+
+    .switch-toggle-input:checked + .switch-toggle-label::after {
+      transform: translateX(20px);
+    }
+  </style>
+</head>
+<body>
+  
+  <!-- ─── LEFT BRAND SIDEBAR ─── -->
+  <aside class="sidebar">
+    <div class="brand-container">
+      <div class="brand-logo-container" style="background: transparent; box-shadow: none; overflow: hidden; padding: 0;">
+        <img src="/profileyou_logo.png" alt="profileyou logo" width="32" height="32" style="border-radius: 8px; object-fit: cover;">
+      </div>
+      <div class="brand-name">profileyou</div>
+    </div>
+    
+    <div class="sidebar-section-header">General</div>
+    <nav>
+      <ul class="sidebar-nav-list">
+        <li>
+          <a class="sidebar-nav-item" style="opacity: 0.5; pointer-events: none;">
+            <span>🏁 Getting Started</span>
+          </a>
+        </li>
+        <li>
+          <a class="sidebar-nav-item" style="opacity: 0.5; pointer-events: none;">
+            <span>🏪 Creator Store</span>
+          </a>
+        </li>
+        <li>
+          <a class="sidebar-nav-item" style="opacity: 0.5; pointer-events: none;">
+            <span>💳 Payouts / Earn</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div class="sidebar-section-header">Apps & Campaigns</div>
+    <nav>
+      <ul class="sidebar-nav-list">
+        <li>
+          <a class="sidebar-nav-item active" data-panel="campaigns" onclick="switchPanel('campaigns')">
+            <span>⚡ AutoDM Builder</span>
+          </a>
+        </li>
+        <li>
+          <a class="sidebar-nav-item" data-panel="leads" onclick="switchPanel('leads')">
+            <span>👥 Audience Contacts</span>
+          </a>
+        </li>
+        <li>
+          <a class="sidebar-nav-item" data-panel="logs" onclick="switchPanel('logs')">
+            <span>💻 Telemetry Console</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+    
+    <!-- Premium Upgrade Banner Card -->
+    <div class="sidebar-promo-card">
+      <h4>Free Tier Active</h4>
+      <p>Unlock unlimited rules, advanced follow gates, and premium email webhooks.</p>
+      <button class="sidebar-promo-btn" onclick="alert('Upgrade to profileyou Premium is currently under development. All features of the Auto-DM SaaS sandbox remain fully unlocked and free!')">
+        <span>Upgrade to Premium</span>
+        <span>🚀</span>
+      </button>
+    </div>
+
+    <!-- Instagram Connection Status -->
+    <div id="ig-connect-section" style="margin-bottom: 16px; display: none;">
+      <a href="/api/oauth/facebook" class="sidebar-promo-btn" style="text-decoration: none; display: flex; align-items: center; gap: 8px; justify-content: center; background: linear-gradient(135deg, #84cc16 0%, #059669 100%); color: #0a0e17; font-weight: 700; font-size: 12px; padding: 10px 14px; border-radius: 10px; border: none; cursor: pointer; width: 100%;">
+        <span>📸</span>
+        <span>Connect Instagram</span>
+      </a>
+    </div>
+    <div id="ig-connected-badge" style="display: none; margin-bottom: 16px; padding: 10px 14px; background: rgba(132, 204, 22, 0.08); border: 1px solid rgba(132, 204, 22, 0.15); border-radius: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #84cc16; display: inline-block;"></span>
+        <span style="color: #bef264; font-size: 11px; font-weight: 600;" id="ig-connected-username">@username</span>
+      </div>
+      <button onclick="disconnectInstagram()" style="width: 100%; padding: 6px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 6px; color: #fca5a5; font-size: 10px; cursor: pointer; font-family: inherit;">Disconnect</button>
+    </div>
+
+    <!-- Active User Status Card -->
+    <div class="sidebar-user-card">
+      <div class="sidebar-user-avatar" id="user-avatar">?</div>
+      <div class="sidebar-user-info">
+        <span class="sidebar-user-name" id="user-display-name">Loading...</span>
+        <span class="sidebar-user-role" id="user-role">Creator</span>
+      </div>
+    </div>
+    <!-- Logout -->
+    <button onclick="handleLogout()" style="width: 100%; margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #94a3b8; font-size: 11px; font-family: inherit; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.1)'; this.style.color='#fca5a5'; this.style.borderColor='rgba(239,68,68,0.2)';" onmouseout="this.style.background='rgba(255,255,255,0.04)'; this.style.color='#94a3b8'; this.style.borderColor='rgba(255,255,255,0.08)';">Sign Out</button>
+  </aside>
+
+  <!-- ─── MAIN VIEW CONTAINER ─── -->
+  <main class="main-content">
+    
+    <!-- Top Header -->
+    <header class="dashboard-header">
+      <div>
+        <div class="header-title-wrapper">
+          <h2 class="dashboard-title">AutoDM Automations</h2>
+          <span class="reels-count-badge" id="reels-count">0 Reels Synced</span>
+        </div>
+        <div class="header-subtitle">Build interactive custom triggers and collect lead emails on Instagram Reels.</div>
+      </div>
+      <div class="header-actions">
+        <!-- Live Connection status badge -->
+        <span class="token-status-badge">
+          <span class="status-dot inactive" id="token-status-dot"></span>
+          <span id="token-status-text" style="color: var(--text-secondary);">Connecting...</span>
+        </span>
+        <button id="btn-sync-media" class="btn btn-secondary">Sync Latest Reels</button>
+        <button class="btn btn-primary-glow" onclick="openCampaignEditor('DEFAULT')">+ Create Automation</button>
+      </div>
+    </header>
+
+    <!-- Growth Feature Info Banner -->
+    <div class="growth-banner">
+      <span>Creators have gained <strong>51,556 new followers</strong> in the last 24 hours using the <strong>Follower Growth Feature</strong> 🚀</span>
+      <button class="btn btn-secondary btn-sm" style="color: var(--accent-purple); border-color: rgba(132, 204, 22, 0.25);" onclick="alert('The Follower Growth Feature sends a soft follower nudge directly to your DMs to optimize follower conversions before sending content links.')">Learn More</button>
+    </div>
+
+    <!-- Metrics Scorecards Grid -->
+    <section class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-label-wrapper">
+          <span class="metric-label">DMs Dispatched</span>
+          <div class="metric-icon-circle">
+            <!-- Icon DM -->
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          </div>
+        </div>
+        <div class="metric-value" id="stat-success">0</div>
+        <div class="metric-sub">Auto DMs successfully delivered</div>
+        <svg class="card-sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0 20 Q 25 5, 50 18 T 100 8" fill="none" stroke="var(--accent-purple)" stroke-width="2"></path></svg>
+      </div>
+      
+      <div class="metric-card">
+        <div class="metric-label-wrapper">
+          <span class="metric-label">Emails Captured</span>
+          <div class="metric-icon-circle" style="background-color: rgba(219,39,119,0.08); color: var(--accent-pink);">
+            <!-- Icon Lead Email -->
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+          </div>
+        </div>
+        <div class="metric-value" id="stat-leads" style="color: var(--accent-pink);">0</div>
+        <div class="metric-sub">
+          <span class="locked-badge"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Unlock Pro</span>
+          <span>Lead contacts list</span>
+        </div>
+        <svg class="card-sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0 15 Q 30 25, 60 5 T 100 12" fill="none" stroke="var(--accent-pink)" stroke-width="2"></path></svg>
+      </div>
+      
+      <div class="metric-card">
+        <div class="metric-label-wrapper">
+          <span class="metric-label">Lifetime Runs</span>
+          <div class="metric-icon-circle" style="background-color: rgba(59,130,246,0.08); color: #3b82f6;">
+            <!-- Icon Play -->
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          </div>
+        </div>
+        <div class="metric-value" id="stat-total" style="color: #3b82f6;">0</div>
+        <div class="metric-sub">Total webhook events parsed</div>
+        <svg class="card-sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0 25 Q 20 15, 40 22 T 100 5" fill="none" stroke="#3b82f6" stroke-width="2"></path></svg>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label-wrapper">
+          <span class="metric-label">Dispatch Rate</span>
+          <div class="metric-icon-circle" style="background-color: var(--accent-green-bg); color: var(--accent-green);">
+            <!-- Icon Check -->
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+        </div>
+        <div class="metric-value" id="stat-rate" style="color: var(--accent-green);">100%</div>
+        <div class="metric-sub">Average webhook success rate</div>
+        <svg class="card-sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none"><path d="M0 5 Q 40 12, 70 5 T 100 20" fill="none" stroke="var(--accent-green)" stroke-width="2"></path></svg>
+      </div>
+    </section>
+
+    <!-- Sub-tab Bar Controls (mapped to display views) -->
+    <div class="tabs-bar">
+      <div class="tabs-list">
+        <button class="tab-btn active" id="tab-btn-camp" onclick="switchPanel('campaigns')">Campaign Rules</button>
+        <button class="tab-btn" id="tab-btn-leads" onclick="switchPanel('leads')">Audience Hub</button>
+        <button class="tab-btn" id="tab-btn-logs" onclick="switchPanel('logs')">Telemetry Console</button>
+      </div>
+      <div class="tabs-right-links">
+        <a href="https://help.manychat.com" target="_blank" rel="noopener">📚 View Demo API Docs</a>
+        <span>•</span>
+        <a href="#" onclick="alert('Help center is under construction. Please use the simulated sandbox below to test webhook hooks!')">💡 Resources & Support</a>
+      </div>
+    </div>
+
+    <!-- ─── PANEL 1: CAMPAIGNS WORKSPACE ─── -->
+    <div class="panel-view active" id="panel-campaigns">
+      <div class="campaigns-layout">
+        
+        <!-- Rules List & Table Container -->
+        <div>
+          <!-- Default Fallback Banner -->
+          <div class="default-rule-section" id="default-rule-card">
+            <div class="default-rule-info">
+              <h4>Global Fallback Rule</h4>
+              <div class="trigger-title">Trigger Keyword: "<span id="default-trigger">pipeline</span>"</div>
+              <div class="trigger-desc" id="default-message">Loading default fallback response message...</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="openCampaignEditor('DEFAULT')">Edit Fallback</button>
+          </div>
+
+          <!-- Campaigns Table Card -->
+          <div class="campaigns-table-card">
+            <div class="table-search-row">
+              <div class="search-input-wrapper">
+                <!-- Icon Search -->
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="campaigns-search" placeholder="Search campaign rules..." oninput="filterCampaignsTable()">
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="loadConfig()">Reload Table</button>
+            </div>
+            
+            <table class="stark-table" id="campaigns-table">
+              <thead>
+                <tr>
+                  <th>Media Details</th>
+                  <th>Scope</th>
+                  <th>Keyword Triggers</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="campaigns-table-body">
+                <tr>
+                  <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 40px;">No Reels synced yet. Click "Sync Latest Reels" above to fetch your posts from Instagram!</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Right Side: Instagram Live Sandbox Simulator Mockup -->
+        <div class="simulator-panel">
+          <div class="simulator-card">
+            <div>
+              <h3 style="font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: var(--text-primary);">Interactive Simulator Sandbox</h3>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Test your AutoDM flows in real time without calling live Meta servers.</p>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" for="sim-media-select">Target Video/Reel</label>
+              <select id="sim-media-select">
+                <option value="DEFAULT">Default Fallback Rule</option>
+              </select>
+            </div>
+
+            <!-- Vertical iOS Mockup Device -->
+            <div class="phone-mockup">
+              <div class="phone-notch"></div>
+              <div class="phone-screen">
+                
+                <!-- Phone Top Profile Header -->
+                <div class="phone-header">
+                  <div class="phone-header-avatar">py</div>
+                  <div class="phone-header-info">
+                    <div class="phone-header-title" id="phone-brand-title">profileyou bot</div>
+                    <div class="phone-header-subtitle">
+                      <span class="phone-header-dot"></span>
+                      <span>active simulation</span>
+                    </div>
+                  </div>
+                  <!-- Mini indicators -->
+                  <div style="color: #71717a; font-size: 10px; font-family: var(--font-mono);" id="phone-mode-indicator">DMs</div>
+                </div>
+
+                <!-- Tabs: Comments vs DMs -->
+                <div class="phone-tabs">
+                  <div class="phone-tab active" id="phone-tab-comments" onclick="setPhoneTab('comments')">Reel Comments</div>
+                  <div class="phone-tab" id="phone-tab-dms" onclick="setPhoneTab('dms')">Inbox Chat (DMs)</div>
+                </div>
+
+                <!-- Scrollable screen body -->
+                <div class="phone-body" id="phone-screen-body">
+                  <!-- Default state will be populated dynamically -->
+                </div>
+
+                <!-- Simulated message input bar -->
+                <div class="phone-footer">
+                  <div class="phone-input-wrapper">
+                    <!-- Target inputs hidden / handled programmatically -->
+                    <input type="text" id="phone-chat-input" placeholder="Type mock comment / email...">
+                    <button class="phone-input-send-btn" id="phone-send-btn">
+                      <!-- Right arrow SVG -->
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Legacy invisible elements kept to maintain native script binding compatibility -->
+            <div style="display: none;">
+              <input type="text" id="sim-username" value="iamshubhankarraj_07">
+              <input type="text" id="sim-comment" placeholder="Type trigger word...">
+              <button id="btn-simulate">Trigger</button>
+              
+              <div class="sim-dialog" id="sim-email-dialog">
+                <input type="hidden" id="sim-dm-sender-id">
+                <input type="text" id="sim-dm-text">
+                <button id="btn-submit-dm">Send</button>
+              </div>
+            </div>
+
+            <div style="background-color: var(--bg-canvas); border: 1px dashed var(--border-color); padding: 12px; border-radius: 8px; font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
+              💡 <strong>How to test:</strong> Under the <em>Reel Comments</em> tab, type your trigger word (e.g. <code>pipeline</code>) and press Enter. The phone screen will automatically switch to the <em>Inbox Chat</em> tab and run the DM simulation sequence!
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ─── PANEL 2: LEADS LIST AUDIENCE HUB ─── -->
+    <div class="panel-view" id="panel-leads">
+      <div class="leads-card">
+        <div class="leads-card-header">
+          <div>
+            <h3 style="font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--text-primary);">Captured Email Leads</h3>
+            <p style="font-size: 12.5px; color: var(--text-secondary); margin-top: 2px;">Database contacts gathered via the automated email collection flow.</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="exportLeads()">Export Leads (CSV)</button>
+        </div>
+        
+        <table class="stark-table">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email Address</th>
+              <th>Date Registered</th>
+            </tr>
+          </thead>
+          <tbody id="leads-table-body">
+            <tr>
+              <td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 40px;">No leads captured yet. Enable "Collect Email" on your Reels rules to collect list contacts.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ─── PANEL 3: TELEMETRY console logs ─── -->
+    <div class="panel-view" id="panel-logs">
+      <div class="console-card">
+        <div class="console-header">
+          <div class="console-title-wrapper">
+            <div class="console-terminal-lights">
+              <span class="console-light red"></span>
+              <span class="console-light yellow"></span>
+              <span class="console-light green"></span>
+            </div>
+            <span class="console-title">Live Telemetry Console Log Stream</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-clear-logs" style="font-size: 11px; padding: 4px 10px; background: transparent; color: #a1a1aa; border-color: rgba(255,255,255,0.15)">Clear Logs</button>
+        </div>
+        
+        <div class="console-terminal-body" id="logs-view">
+          <div class="console-log-line SYSTEM">
+            <span class="console-log-time">[15:29:45]</span>
+            <span>Connecting to telemetry log stream...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ─── SLIDE-OVER DRAWER MODAL FOR CAMPAIGN RULES ─── -->
+  <div class="drawer-overlay" id="rule-modal">
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <h3 class="drawer-title" id="modal-title">Configure Campaign</h3>
+        <button onclick="closeModal()" class="btn btn-secondary btn-sm">Close Drawer</button>
+      </div>
+
+      <!-- Reel item visual banner in Drawer -->
+      <div id="modal-reel-preview" class="drawer-reel-preview">
+        <img id="modal-reel-img" src="" alt="Reel Preview">
+        <div class="drawer-reel-preview-details">
+          <div class="drawer-reel-id" id="modal-reel-id">Reel ID: -</div>
+          <div class="drawer-reel-caption" id="modal-reel-caption">-</div>
+        </div>
+      </div>
+
+      <form id="rule-form">
+        <!-- Hidden input media ID -->
+        <input type="hidden" id="edit-media-id">
+        
+        <div class="form-group">
+          <label class="form-label" for="edit-scope-type">Campaign Scope</label>
+          <select id="edit-scope-type">
+            <option value="SPECIFIC">Specific Post / Reel Only</option>
+            <option value="ANY">Any Post / Reel (Global Fallback)</option>
+            <option value="NEXT">Next Post / Reel (Auto-Bind on Next Sync)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="edit-trigger-word">Trigger Keywords (Comma separated)</label>
+          <input type="text" id="edit-trigger-word" required placeholder="e.g. pipeline, free, guide">
+          <span class="form-input-help">Followers must comment one of these exact keywords to trigger this rule. Case-insensitive.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="edit-excluded-keywords">Excluded Keywords (Comma separated)</label>
+          <input type="text" id="edit-excluded-keywords" placeholder="e.g. bad, spam, unsubscribe">
+          <span class="form-input-help">If the comment contains any of these words, the bot will skip execution.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="edit-public-replies">Canned Public Replies (Comma separated)</label>
+          <input type="text" id="edit-public-replies" placeholder="Check DMs!,Check your inbox! 📩,Sent you the details!">
+          <span class="form-input-help">A randomized reply chosen from this list will be posted publicly under the follower's comment.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="edit-dm-message">Direct Message Response</label>
+          <textarea id="edit-dm-message" required placeholder="Hey! Thanks for commenting. Here is the link to download the files: https://gdrive.link/pipeline"></textarea>
+          <span class="form-input-help">The primary message containing your delivery link sent privately via DM.</span>
+        </div>
+
+        <!-- Switches -->
+        <div class="switch-row">
+          <div class="switch-info">
+            <span class="switch-title">Active Campaign</span>
+            <span class="switch-desc">Turn this rule on or off.</span>
+          </div>
+          <input type="checkbox" id="edit-is-active" class="switch-toggle-input" checked>
+          <label for="edit-is-active" class="switch-toggle-label"></label>
+        </div>
+
+        <div class="switch-row">
+          <div class="switch-info">
+            <span class="switch-title">Ask for Follow (Nudge Gate)</span>
+            <span class="switch-desc">Nudge user to follow to obtain content.</span>
+          </div>
+          <input type="checkbox" id="edit-ask-follow" class="switch-toggle-input">
+          <label for="edit-ask-follow" class="switch-toggle-label"></label>
+        </div>
+
+        <div class="switch-row">
+          <div class="switch-info">
+            <span class="switch-title">Collect Email Address First</span>
+            <span class="switch-desc">Prompt for email in DM before dispatching link.</span>
+          </div>
+          <input type="checkbox" id="edit-collect-email" class="switch-toggle-input">
+          <label for="edit-collect-email" class="switch-toggle-label"></label>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 32px;">
+          <button type="submit" class="btn btn-primary-glow" style="flex-grow: 1; justify-content: center;">Save Rule Settings</button>
+          <button type="button" id="btn-delete-rule" class="btn btn-secondary" style="color: var(--accent-red); border-color: rgba(239, 68, 68, 0.25);">Reset to Default</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ─── JAVASCRIPT LOGIC ─── -->
+  <script>
+    // ── AUTH CHECK: Redirect to login if not authenticated ──
+    let currentUser = null;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) {
+          window.location.href = '/login.html';
+          return;
+        }
+        const data = await res.json();
+        currentUser = data.user;
+        initUserUI(currentUser);
+      } catch (e) {
+        window.location.href = '/login.html';
+      }
+
+      // Check for OAuth callback messages
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('oauth_success')) {
+        alert('✅ ' + params.get('oauth_success'));
+        window.history.replaceState({}, '', '/');
+        location.reload();
+      }
+      if (params.get('oauth_error')) {
+        alert('❌ ' + params.get('oauth_error'));
+        window.history.replaceState({}, '', '/');
+      }
+    })();
+
+    function initUserUI(user) {
+      // Update avatar
+      const avatarEl = document.getElementById('user-avatar');
+      if (user.displayName) {
+        const initials = user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+        avatarEl.textContent = initials;
+      } else {
+        avatarEl.textContent = user.email[0].toUpperCase();
+      }
+
+      // Update name and role
+      document.getElementById('user-display-name').textContent = user.displayName || user.email;
+      document.getElementById('user-role').textContent = user.igConnected ? `@${user.igUsername}` : 'Creator';
+
+      // Show Connect/Connected sections
+      if (user.igConnected) {
+        document.getElementById('ig-connected-badge').style.display = 'block';
+        document.getElementById('ig-connect-section').style.display = 'none';
+        document.getElementById('ig-connected-username').textContent = `@${user.igUsername}`;
+      } else {
+        document.getElementById('ig-connect-section').style.display = 'block';
+        document.getElementById('ig-connected-badge').style.display = 'none';
+      }
+    }
+
+    async function handleLogout() {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/login.html';
+      } catch (e) {
+        window.location.href = '/login.html';
+      }
+    }
+
+    async function disconnectInstagram() {
+      if (!confirm('Are you sure you want to disconnect your Instagram account?')) return;
+      try {
+        const res = await fetch('/api/oauth/disconnect', { method: 'POST' });
+        if (res.ok) {
+          alert('Instagram disconnected.');
+          location.reload();
+        }
+      } catch (e) {
+        alert('Failed to disconnect.');
+      }
+    }
+
+    const reelsContainerBody = document.getElementById('campaigns-table-body');
+    const simMediaSelect = document.getElementById('sim-media-select');
+    const tokenStatusDot = document.getElementById('token-status-dot');
+    const tokenStatusText = document.getElementById('token-status-text');
+    const logsView = document.getElementById('logs-view');
+    const leadsTableBody = document.getElementById('leads-table-body');
+    
+    // Loaded Cache state
+    let cachedReels = [];
+    let defaultRule = null;
+    let customRules = {};
+
+    // ─── TABS NAVIGATION ───
+    function switchPanel(panelId) {
+      // Hide all panels
+      document.querySelectorAll('.panel-view').forEach(p => p.classList.remove('active'));
+      // Deactivate all sidebar items & top tabs
+      document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+      // Show specific panel
+      document.getElementById(`panel-${panelId}`).classList.add('active');
+
+      // Set active navigation states
+      const sideItem = document.querySelector(`.sidebar-nav-item[data-panel="${panelId}"]`);
+      if (sideItem) sideItem.classList.add('active');
+
+      const tabBtn = document.getElementById(`tab-btn-${panelId === 'campaigns' ? 'camp' : panelId}`);
+      if (tabBtn) tabBtn.classList.add('active');
+    }
+
+    // ─── INITIALIZATION & FETCHERS ───
+    async function loadConfig() {
+      try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        
+        defaultRule = data.defaultRule;
+        customRules = {};
+        
+        // Map rules to hashmap
+        data.automations.forEach(r => {
+          customRules[r.media_id] = r;
+        });
+
+        // Set fallback card
+        document.getElementById('default-trigger').innerText = defaultRule.trigger_word;
+        document.getElementById('default-message').innerText = defaultRule.dm_message;
+
+        updateStatusIndicator(data.hasTokenConfigured);
+        await loadReels();
+        await fetchContacts();
+      } catch (err) {
+        console.error('Error fetching configurations:', err);
+      }
+    }
+
+    async function loadReels() {
+      try {
+        const res = await fetch('/api/media');
+        cachedReels = await res.json();
+        
+        document.getElementById('reels-count').innerText = `${cachedReels.length} Reels Synced`;
+
+        if (cachedReels.length === 0) {
+          reelsContainerBody.innerHTML = `
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 40px;">No Reels synced yet. Click "Sync Latest Reels" above to fetch your posts from Instagram!</td>
+            </tr>`;
+          return;
+        }
+
+        // Render table rows
+        renderCampaignsTable(cachedReels);
+
+        // Populate simulation select dropdown
+        simMediaSelect.innerHTML = `<option value="DEFAULT">Default Fallback Rule</option>` + 
+          cachedReels.map(p => `<option value="${p.id}">Reel: ${escapeHtml((p.caption || '').substring(0, 30))}...</option>`).join('');
+
+      } catch (err) {
+        console.error('Error rendering campaigns table:', err);
+      }
+    }
+
+    function renderCampaignsTable(reels) {
+      reelsContainerBody.innerHTML = reels.map(post => {
+        const rule = customRules[post.id] || null;
+        const hasCustomRule = !!rule;
+        
+        const triggerStr = rule ? rule.trigger_word : defaultRule.trigger_word;
+        const scopeStr = rule ? rule.scope_type : 'ANY';
+        const isActive = rule ? rule.is_active === 1 : defaultRule.is_active === 1;
+
+        return `
+          <tr class="campaign-table-row">
+            <td>
+              <div class="reel-meta-cell">
+                <div class="reel-thumbnail-container">
+                  <img src="${post.thumbnail_url || post.media_url || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=500'}" alt="">
+                </div>
+                <div class="reel-meta-details">
+                  <div class="caption">${escapeHtml(post.caption || 'No caption text')}</div>
+                  <div class="handle">@subh.expp • ${post.media_type}</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span style="font-family: var(--font-mono); font-size: 11px; font-weight: bold; color: var(--text-secondary);">${scopeStr}</span>
+            </td>
+            <td>
+              <span class="trigger-badge">"${escapeHtml(triggerStr)}"</span>
+            </td>
+            <td style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary);">
+              ${rule ? 'custom' : 'default'}
+            </td>
+            <td>
+              <span class="status-badge ${isActive ? 'status-badge-active' : 'status-badge-disabled'}">
+                ${isActive ? 'Active' : 'Disabled'}
+              </span>
+            </td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="openCampaignEditor('${post.id}')">Configure</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterCampaignsTable() {
+      const searchVal = document.getElementById('campaigns-search').value.toLowerCase();
+      const rows = document.querySelectorAll('.campaign-table-row');
+      
+      rows.forEach(row => {
+        const caption = row.querySelector('.caption').textContent.toLowerCase();
+        const triggers = row.querySelector('.trigger-badge').textContent.toLowerCase();
+        
+        if (caption.includes(searchVal) || triggers.includes(searchVal)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+
+    // Trigger Meta Reels Sync
+    document.getElementById('btn-sync-media').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-sync-media');
+      btn.innerText = 'Syncing...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/media/sync', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert(`Success! Synced ${data.count} posts from Meta API.`);
+          await loadConfig();
+        } else {
+          alert(`Failed to sync: ${data.error}`);
+        }
+      } catch (err) {
+        alert('Internal server sync failure.');
+      } finally {
+        btn.innerText = 'Sync Latest Reels';
+        btn.disabled = false;
+      }
+    });
+
+    // ─── EDITOR DRAWER ───
+    function openCampaignEditor(mediaId) {
+      const modal = document.getElementById('rule-modal');
+      const title = document.getElementById('modal-title');
+      const formReelPreview = document.getElementById('modal-reel-preview');
+      const formReelImg = document.getElementById('modal-reel-img');
+      const formReelId = document.getElementById('modal-reel-id');
+      const formReelCaption = document.getElementById('modal-reel-caption');
+      
+      document.getElementById('edit-media-id').value = mediaId;
+
+      if (mediaId === 'DEFAULT') {
+        title.innerText = 'Global Fallback Rule';
+        formReelPreview.style.display = 'none';
+        
+        document.getElementById('edit-scope-type').value = 'ANY';
+        document.getElementById('edit-scope-type').disabled = true;
+        document.getElementById('edit-trigger-word').value = defaultRule.trigger_word;
+        document.getElementById('edit-excluded-keywords').value = defaultRule.excluded_keywords || '';
+        document.getElementById('edit-public-replies').value = defaultRule.public_replies || '';
+        document.getElementById('edit-dm-message').value = defaultRule.dm_message;
+        document.getElementById('edit-is-active').checked = defaultRule.is_active === 1;
+        document.getElementById('edit-ask-follow').checked = defaultRule.ask_for_follow === 1;
+        document.getElementById('edit-collect-email').checked = defaultRule.collect_email === 1;
+        document.getElementById('btn-delete-rule').style.display = 'none';
+      } else {
+        title.innerText = 'Customize Reel Automation';
+        formReelPreview.style.display = 'flex';
+        document.getElementById('edit-scope-type').disabled = false;
+        
+        const post = cachedReels.find(p => p.id === mediaId);
+        formReelImg.src = post.thumbnail_url || post.media_url || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=500';
+        formReelId.innerText = `Reel ID: ${post.id}`;
+        formReelCaption.innerText = post.caption || '';
+
+        const rule = customRules[mediaId];
+        if (rule) {
+          document.getElementById('edit-scope-type').value = rule.scope_type || 'SPECIFIC';
+          document.getElementById('edit-trigger-word').value = rule.trigger_word;
+          document.getElementById('edit-excluded-keywords').value = rule.excluded_keywords || '';
+          document.getElementById('edit-public-replies').value = rule.public_replies || '';
+          document.getElementById('edit-dm-message').value = rule.dm_message;
+          document.getElementById('edit-is-active').checked = rule.is_active === 1;
+          document.getElementById('edit-ask-follow').checked = rule.ask_for_follow === 1;
+          document.getElementById('edit-collect-email').checked = rule.collect_email === 1;
+          document.getElementById('btn-delete-rule').style.display = 'block';
+        } else {
+          // prefill defaults
+          document.getElementById('edit-scope-type').value = 'SPECIFIC';
+          document.getElementById('edit-trigger-word').value = defaultRule.trigger_word;
+          document.getElementById('edit-excluded-keywords').value = '';
+          document.getElementById('edit-public-replies').value = 'Check DMs!,Sent you the details! 📩,Sent! Check inbox.';
+          document.getElementById('edit-dm-message').value = defaultRule.dm_message;
+          document.getElementById('edit-is-active').checked = true;
+          document.getElementById('edit-ask-follow').checked = false;
+          document.getElementById('edit-collect-email').checked = false;
+          document.getElementById('btn-delete-rule').style.display = 'none';
+        }
+      }
+
+      modal.classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('rule-modal').classList.remove('open');
+    }
+
+    // Save Rule Form
+    document.getElementById('rule-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const mediaId = document.getElementById('edit-media-id').value;
+      const triggerWord = document.getElementById('edit-trigger-word').value;
+      const dmMessage = document.getElementById('edit-dm-message').value;
+      const isActive = document.getElementById('edit-is-active').checked ? 1 : 0;
+      const askForFollow = document.getElementById('edit-ask-follow').checked ? 1 : 0;
+      const scopeType = document.getElementById('edit-scope-type').value;
+      const excludedKeywords = document.getElementById('edit-excluded-keywords').value;
+      const publicReplies = document.getElementById('edit-public-replies').value;
+      const collectEmail = document.getElementById('edit-collect-email').checked ? 1 : 0;
+
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            mediaId, triggerWord, dmMessage, isActive, askForFollow, scopeType, excludedKeywords, publicReplies, collectEmail 
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeModal();
+          await loadConfig();
+        } else {
+          alert('Failed to save settings: ' + data.error);
+        }
+      } catch (err) {
+        alert('Server failure saving rules.');
+      }
+    });
+
+    // Delete custom rule
+    document.getElementById('btn-delete-rule').addEventListener('click', async () => {
+      const mediaId = document.getElementById('edit-media-id').value;
+      if (mediaId === 'DEFAULT') return;
+
+      try {
+        const res = await fetch(`/api/config/${mediaId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          closeModal();
+          await loadConfig();
+        }
+      } catch (err) {
+        alert('Failed to delete rule.');
+      }
+    });
+
+
+    // ─── HIGH-FIDELITY PHONE SIMULATOR LOGIC ───
+    let simulatorTab = 'comments'; // 'comments' | 'dms'
+    let currentMockSenderId = null;
+
+    const phoneScreenBody = document.getElementById('phone-screen-body');
+    const phoneChatInput = document.getElementById('phone-chat-input');
+    const phoneSendBtn = document.getElementById('phone-send-btn');
+    const phoneTabComments = document.getElementById('phone-tab-comments');
+    const phoneTabDms = document.getElementById('phone-tab-dms');
+    const phoneModeIndicator = document.getElementById('phone-mode-indicator');
+
+    // List of comments in active memory
+    let simulatedComments = [
+      { username: 'social_grower', text: 'Love this strategy! Will try it out.', time: '2m' },
+      { username: 'hustle_marketer', text: 'Does it work for reels?', time: '1m' }
+    ];
+
+    // List of DM messages in active memory
+    let simulatedDMs = [
+      { sender: 'bot', text: 'Welcome to the profileyou sandbox. Post a comment on the left to start!' }
+    ];
+
+    function setPhoneTab(tab) {
+      simulatorTab = tab;
+      if (tab === 'comments') {
+        phoneTabComments.classList.add('active');
+        phoneTabDms.classList.remove('active');
+        phoneModeIndicator.innerText = 'COMMENTS';
+        phoneChatInput.placeholder = 'Write a mock comment...';
+      } else {
+        phoneTabComments.classList.remove('active');
+        phoneTabDms.classList.add('active');
+        phoneModeIndicator.innerText = 'DMS';
+        if (currentMockSenderId) {
+          phoneChatInput.placeholder = 'Type email address...';
+        } else {
+          phoneChatInput.placeholder = 'No active DM thread...';
+        }
+      }
+      renderPhoneBody();
+    }
+
+    function renderPhoneBody() {
+      if (simulatorTab === 'comments') {
+        // Show target reel preview at top of comment feed
+        const selectedId = simMediaSelect.value;
+        let previewHtml = '';
+        if (selectedId !== 'DEFAULT') {
+          const post = cachedReels.find(p => p.id === selectedId);
+          if (post) {
+            previewHtml = `
+              <div style="background-color: #121212; border: 1px solid #1f1f2e; padding: 10px; border-radius: 10px; display: flex; gap: 10px; margin-bottom: 8px;">
+                <img src="${post.thumbnail_url || post.media_url || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=500'}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 4px;">
+                <div style="font-size: 10px; color: #a1a1aa; line-height: 1.3;">
+                  <strong style="color:#fff;">Active Reel:</strong><br>
+                  ${escapeHtml((post.caption || '').substring(0, 48))}...
+                </div>
+              </div>
+            `;
+          }
+        }
+        
+        phoneScreenBody.innerHTML = previewHtml + simulatedComments.map(c => `
+          <div class="phone-comment-item">
+            <div class="phone-comment-avatar">${c.username.substring(0,2).toUpperCase()}</div>
+            <div class="phone-comment-details">
+              <div class="phone-comment-user">@${escapeHtml(c.username)}</div>
+              <div class="phone-comment-text">${escapeHtml(c.text)}</div>
+              <div class="phone-comment-date">${c.time}</div>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        phoneScreenBody.innerHTML = simulatedDMs.map(m => `
+          <div class="phone-chat-bubble ${m.sender}">
+            ${escapeHtml(m.text)}
+          </div>
+        `).join('');
+      }
+      
+      // Auto scroll to bottom
+      phoneScreenBody.scrollTop = phoneScreenBody.scrollHeight;
+    }
+
+    // Capture enter / button clicks on simulator
+    async function submitPhoneAction() {
+      const textVal = phoneChatInput.value.trim();
+      if (!textVal) return;
+
+      phoneChatInput.value = '';
+
+      if (simulatorTab === 'comments') {
+        // Post mock comment
+        const username = document.getElementById('sim-username').value || 'iamshubhankarraj_07';
+        simulatedComments.push({ username, text: textVal, time: 'Just now' });
+        renderPhoneBody();
+
+        // Trigger simulator endpoint
+        const mediaId = simMediaSelect.value;
+        try {
+          const response = await fetch('/api/simulate-comment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, commentText: textVal, mediaId })
+          });
+          const data = await response.json();
+          
+          // Clear active inbox for fresh simulation
+          simulatedDMs = [];
+
+          // Log comment webhook event
+          simulatedDMs.push({ sender: 'bot', text: `💬 Instagram Comment Triggered: "@${username}: ${textVal}"` });
+
+          if (data.matched) {
+            // Get active rule configurations
+            const activeRule = mediaId === 'DEFAULT' ? defaultRule : (customRules[mediaId] || defaultRule);
+            
+            if (activeRule.ask_for_follow === 1) {
+              simulatedDMs.push({ sender: 'bot', text: `Thanks for commenting! Please make sure to follow @subh.expp to receive the private link.` });
+            }
+
+            if (data.needsEmail) {
+              currentMockSenderId = data.mockSenderId;
+              simulatedDMs.push({ sender: 'bot', text: `Hey! Drop your email address below and I'll send you the guide right away! (Or type 'skip' to bypass).` });
+            } else {
+              currentMockSenderId = null;
+              simulatedDMs.push({ sender: 'bot', text: activeRule.dm_message });
+            }
+          } else {
+            simulatedDMs.push({ sender: 'bot', text: `System: Comment did not match keyword triggers. No response sent.` });
+          }
+
+          // Switch tab to DMs automatically to show the private conversation
+          setTimeout(() => {
+            setPhoneTab('dms');
+          }, 800);
+
+          fetchLogs();
+          fetchAnalytics();
+        } catch (err) {
+          console.error('Simulation trigger failed:', err);
+        }
+      } else {
+        // Inbox thread reply (email capture flow)
+        if (!currentMockSenderId) {
+          alert('No active email collection conversation state. Please post a trigger comment first!');
+          return;
+        }
+
+        // Add user reply to UI
+        simulatedDMs.push({ sender: 'user', text: textVal });
+        renderPhoneBody();
+
+        try {
+          const res = await fetch('/api/simulate-dm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ senderId: currentMockSenderId, messageText: textVal })
+          });
+          const data = await res.json();
+          
+          const mediaId = simMediaSelect.value;
+          const activeRule = mediaId === 'DEFAULT' ? defaultRule : (customRules[mediaId] || defaultRule);
+
+          if (textVal.toLowerCase() === 'skip') {
+            simulatedDMs.push({ sender: 'bot', text: activeRule.dm_message });
+            currentMockSenderId = null;
+          } else {
+            // Email validation regex
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (emailRegex.test(textVal)) {
+              simulatedDMs.push({ sender: 'bot', text: `Awesome! Email saved. Here is your access link:` });
+              simulatedDMs.push({ sender: 'bot', text: activeRule.dm_message });
+              currentMockSenderId = null;
+            } else {
+              simulatedDMs.push({ sender: 'bot', text: `That doesn't look like a valid email. Please try again, or type "skip" to bypass.` });
+            }
+          }
+
+          setTimeout(() => {
+            renderPhoneBody();
+          }, 600);
+
+          fetchLogs();
+          fetchAnalytics();
+          fetchContacts();
+        } catch (err) {
+          console.error('DM send simulation failure:', err);
+        }
+      }
+    }
+
+    phoneChatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitPhoneAction();
+    });
+    phoneSendBtn.addEventListener('click', submitPhoneAction);
+
+    // Initial phone screen loading state
+    setPhoneTab('comments');
+
+
+    // ─── CONSOLE LOGS, CONTACTS & METRICS ───
+    async function fetchLogs() {
+      try {
+        const response = await fetch('/api/logs');
+        const data = await response.json();
+        
+        if (data.length === 0) {
+          logsView.innerHTML = '<div style="color: #475569; font-style: italic;">Telemetry stream empty. Trigger a mock comment or Webhook call.</div>';
+          return;
+        }
+
+        logsView.innerHTML = data.map(log => {
+          const time = new Date(log.timestamp).toLocaleTimeString();
+          let lineClass = 'INFO';
+          if (log.status === 'SUCCESS') lineClass = 'SUCCESS';
+          else if (log.status === 'FAILED') lineClass = 'FAILED';
+          else if (log.status === 'SKIPPED') lineClass = 'SYSTEM';
+
+          return `
+            <div class="console-log-line ${lineClass}">
+              <span class="console-log-time">[${time}]</span>
+              <span>
+                <strong style="text-transform: uppercase;">[${log.status || 'INFO'}]</strong> 
+                @${log.commenter_username || 'user'}: "${escapeHtml(log.comment_text || '')}"
+                ${log.error_message ? ` -> Note: ${log.error_message}` : ''}
+              </span>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Error loading logs:', err);
+      }
+    }
+
+    async function fetchContacts() {
+      try {
+        const response = await fetch('/api/contacts');
+        const data = await response.json();
+        
+        document.getElementById('stat-leads').innerText = data.length;
+
+        if (data.length === 0) {
+          leadsTableBody.innerHTML = `
+            <tr>
+              <td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 40px;">No leads captured yet. Enable "Collect Email" on your Reels rules to collect list contacts.</td>
+            </tr>`;
+          return;
+        }
+
+        leadsTableBody.innerHTML = data.map(lead => {
+          const date = new Date(lead.timestamp).toLocaleDateString() + ' ' + new Date(lead.timestamp).toLocaleTimeString();
+          return `
+            <tr>
+              <td>
+                <div style="display:flex; align-items:center; gap: 10px;">
+                  <div class="leads-avatar-circle">${lead.username.substring(0,2).toUpperCase()}</div>
+                  <div style="font-weight:600;">@${escapeHtml(lead.username)}</div>
+                </div>
+              </td>
+              <td style="color: var(--accent-purple); font-weight: 700; font-family: var(--font-mono);">${escapeHtml(lead.email)}</td>
+              <td style="color: var(--text-secondary);">${date}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Error loading contacts:', err);
+      }
+    }
+
+    async function fetchAnalytics() {
+      try {
+        const response = await fetch('/api/analytics');
+        const data = await response.json();
+        
+        document.getElementById('stat-total').innerText = data.totalRuns;
+        document.getElementById('stat-success').innerText = data.successRuns;
+        document.getElementById('stat-rate').innerText = `${data.successRate}%`;
+      } catch (err) {
+        console.error('Error fetching metrics:', err);
+      }
+    }
+
+    document.getElementById('btn-clear-logs').addEventListener('click', async () => {
+      try {
+        await fetch('/api/logs/clear', { method: 'POST' });
+        fetchLogs();
+        fetchAnalytics();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    function exportLeads() {
+      const tableRows = document.querySelectorAll('#leads-table-body tr');
+      if (tableRows.length === 1 && tableRows[0].textContent.includes('No leads')) {
+        alert('No contacts available to export!');
+        return;
+      }
+
+      let csvContent = "Sender IGSID,Captured Email,Date Registered\n";
+      tableRows.forEach(row => {
+        const cols = row.querySelectorAll('td');
+        if (cols.length < 3) return;
+        const username = cols[0].textContent.replace('SR', '').trim();
+        csvContent += `"${username}","${cols[1].textContent}","${cols[2].textContent}"\n`;
+      });
+
+      navigator.clipboard.writeText(csvContent);
+      alert('Leads list copied to clipboard in CSV format! Paste directly into Excel or Google Sheets.');
+    }
+
+    // ─── UTILS ───
+    function updateStatusIndicator(hasToken) {
+      if (hasToken) {
+        tokenStatusDot.className = 'status-dot active';
+        tokenStatusText.innerText = 'Bot Connected';
+        tokenStatusText.style.color = 'var(--accent-green)';
+      } else {
+        tokenStatusDot.className = 'status-dot inactive';
+        tokenStatusText.innerText = 'Token Required';
+        tokenStatusText.style.color = 'var(--accent-yellow)';
+      }
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Init loops
+    loadConfig();
+    fetchLogs();
+    fetchAnalytics();
+    
+    // Poll console logs, contacts, and metrics in real-time
+    setInterval(fetchLogs, 2500);
+    setInterval(fetchContacts, 6000);
+    setInterval(fetchAnalytics, 6000);
+  </script>
+</body>
+</html>

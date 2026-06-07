@@ -1,0 +1,20 @@
+{
+  "name": "auto-dm-server",
+  "version": "1.0.0",
+  "description": "Instagram Auto-DM automation backend with webhooks and dashboard UI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "bcryptjs": "^3.0.3",
+    "connect-sqlite3": "^0.9.16",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.19.0",
+    "morgan": "^1.10.0",
+    "sqlite3": "^6.0.1"
+  }
+}

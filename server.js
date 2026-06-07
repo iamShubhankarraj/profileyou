@@ -1,0 +1,717 @@
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const axios = require('axios');
+const path = require('path');
+const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
+require('dotenv').config();
+
+const dbHelper = require('./database');
+const { requireAuth, mountAuthRoutes } = require('./auth');
+const { mountOAuthRoutes } = require('./oauth');
+const { decrypt } = require('./crypto-util');
+
+// Uncaught exception and rejection handlers to prevent server crashes and keep it running 24/7
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err.stack || err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UNHANDLED REJECTION] at:', promise, 'reason:', reason);
+});
+
+const app = express();
+const PORT = process.env.PORT || 3005;
+const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || 'subh_tle_verify_token_123').trim().replace(/^["']|["']$/g, '');
+
+app.use(cors({ origin: true, credentials: true }));
+app.use(morgan('dev'));
+app.use(express.json());
+
+// ── SESSION MIDDLEWARE ──
+app.use(session({
+  store: new SQLiteStore({ db: 'sessions.sqlite', dir: __dirname }),
+  secret: process.env.SESSION_SECRET || 'profileyou-dev-secret-change-me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  }
+}));
+
+// ── MOUNT AUTH & OAUTH ROUTES (before static files) ──
+mountAuthRoutes(app);
+mountOAuthRoutes(app);
+
+// Health Check Endpoint for uptime monitoring
+app.get('/health', async (req, res) => {
+  try {
+    await dbHelper.getLogs(1);
+    res.json({
+      status: 'OK',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  } catch (err) {
+    console.error('[HEALTH CHECK FAILED]', err);
+    res.status(500).json({
+      status: 'ERROR',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: err.message
+    });
+  }
+});
+
+// Serve Static Frontend Dashboard
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Simple logger console helper
+const consoleLog = (type, message) => {
+  console.log(`[${type}] ${message}`);
+};
+
+// ─── META WEBHOOK VERIFICATION (GET /webhook) ───
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode && token) {
+    if (mode === 'subscribe' && token.trim() === VERIFY_TOKEN) {
+      consoleLog('SYSTEM', 'Meta Webhook verified successfully!');
+      return res.status(200).send(challenge);
+    } else {
+      consoleLog('SYSTEM', 'Webhook verification failed: Invalid verify token.');
+      return res.sendStatus(403);
+    }
+  }
+  res.sendStatus(400);
+});
+
+// ─── MULTI-TENANT WEBHOOK LISTENER (POST /webhook) ───
+app.post('/webhook', async (req, res) => {
+  const body = req.body;
+
+  if (body.object === 'instagram' || body.object === 'page') {
+    consoleLog('WEBHOOK', 'Received webhook payload');
+
+    if (body.entry && Array.isArray(body.entry)) {
+      for (const entry of body.entry) {
+        // Resolve the user by the Page ID from the webhook entry
+        const pageId = entry.id;
+        let user = null;
+        let userToken = null;
+
+        if (pageId) {
+          user = await dbHelper.getUserByPageId(pageId);
+          if (user && user.page_access_token_enc) {
+            try {
+              userToken = decrypt(user.page_access_token_enc);
+            } catch (err) {
+              consoleLog('ERROR', `Failed to decrypt token for user ${user.id}: ${err.message}`);
+            }
+          }
+        }
+
+        // Fallback: use env token if no user found (backward compatibility / migration)
+        if (!userToken) {
+          const envToken = process.env.PAGE_ACCESS_TOKEN;
+          if (envToken && !envToken.includes('your_meta_page_access_token')) {
+            userToken = envToken;
+          }
+        }
+
+        if (!userToken) {
+          consoleLog('WARN', `No token found for Page ID ${pageId}. Skipping entry.`);
+          continue;
+        }
+
+        const userId = user ? user.id : null;
+
+        // 1. Handle Inbound DMs (for email capture workflow)
+        if (entry.messaging && Array.isArray(entry.messaging)) {
+          for (const msgEvent of entry.messaging) {
+            const senderId = msgEvent.sender ? msgEvent.sender.id : null;
+            const message = msgEvent.message;
+            if (senderId && message && message.text) {
+              await handleInboundDm(senderId, message.text, userToken, userId);
+            }
+          }
+        }
+
+        // 2. Handle Comments
+        if (entry.changes && Array.isArray(entry.changes)) {
+          for (const change of entry.changes) {
+            if (change.field === 'comments') {
+              const commentData = change.value;
+              if (!commentData) continue;
+
+              const commentId = commentData.id;
+              const commentText = commentData.text || '';
+              const commenterUsername = commentData.from ? commentData.from.username : 'unknown';
+              const commenterId = commentData.from ? commentData.from.id : null;
+              const mediaId = commentData.media ? commentData.media.id : 'unknown';
+
+              consoleLog('INFO', `Comment detected by @${commenterUsername} on Media ID ${mediaId}: "${commentText}"`);
+
+              try {
+                // Find rule (specific or default fallback)
+                let rule = await dbHelper.getAutomationForMedia(mediaId, userId);
+                
+                // If a rule is set to NEXT scope and media_id matches, use it
+                const nextRule = await dbHelper.dbGet(`SELECT * FROM automations WHERE scope_type = 'NEXT' AND is_active = 1 AND (user_id = ? OR user_id IS NULL) LIMIT 1`, [userId]);
+                if (nextRule && (nextRule.media_id === mediaId || !nextRule.media_id)) {
+                  rule = nextRule;
+                }
+
+                if (!rule || rule.is_active === 0) {
+                  consoleLog('INFO', 'No active rule or fallback configured. Skipping.');
+                  continue;
+                }
+
+                // Check Excluded Keywords first
+                if (rule.excluded_keywords) {
+                  const exclusions = rule.excluded_keywords.split(',').map(k => k.trim().toLowerCase());
+                  const lowercaseComment = commentText.toLowerCase();
+                  const isExcluded = exclusions.some(word => lowercaseComment.includes(word));
+                  
+                  if (isExcluded) {
+                    consoleLog('INFO', `Comment matches excluded keyword. Skipping automation.`);
+                    await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'SKIPPED', 'Excluded keyword matched', userId);
+                    continue;
+                  }
+                }
+
+                // Match Keyword (multi-word trigger support, comma separated)
+                const triggers = rule.trigger_word.split(',').map(t => t.trim().toLowerCase());
+                const cleanComment = commentText.toLowerCase().trim();
+                
+                const isMatched = triggers.some(trigger => {
+                  const matchRegex = new RegExp(`\\b${trigger}\\b`, 'i');
+                  return matchRegex.test(cleanComment) || cleanComment.includes(trigger);
+                });
+
+                if (isMatched) {
+                  consoleLog('INFO', `Trigger word matches for Reel ${mediaId}! Processing reply...`);
+                  
+                  // Shuffle and send randomized public comment reply
+                  if (rule.public_replies) {
+                    const replies = rule.public_replies.split(',');
+                    const randomReply = replies[Math.floor(Math.random() * replies.length)].trim();
+                    await sendPublicCommentReply(commentId, randomReply, userToken);
+                  }
+
+                  // Check if Follow Check is enabled
+                  if (rule.ask_for_follow === 1) {
+                    consoleLog('INFO', 'Follow check gating active. Sending follow nudge message first.');
+                    const igUsername = user ? user.ig_username : 'subh.expp';
+                    const followMsg = `Thanks for commenting! Please make sure to follow @${igUsername} to receive the private link.`;
+                    await sendInstagramDm(commentId, followMsg, userToken);
+                  }
+
+                  // Check if Email Capture is enabled
+                  if (rule.collect_email === 1) {
+                    const cachedEmail = await dbHelper.getContactEmail(commenterUsername);
+                    
+                    if (cachedEmail) {
+                      consoleLog('INFO', `Email for @${commenterUsername} already cached. Dispatching main DM link.`);
+                      await sendInstagramDm(commentId, rule.dm_message, userToken);
+                      await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'SUCCESS', null, userId);
+                    } else {
+                      consoleLog('INFO', `Email capture active. Setting conversation state to AWAITING_EMAIL.`);
+                      await dbHelper.setConversationState(commenterId || commenterUsername, 'AWAITING_EMAIL', mediaId, userId);
+                      
+                      const emailPrompt = `Hey! Drop your email address below and I'll send you the guide right away! (Or type 'skip' to bypass).`;
+                      await sendInstagramDm(commentId, emailPrompt, userToken);
+                    }
+                  } else {
+                    // Standard DM response
+                    const success = await sendInstagramDm(commentId, rule.dm_message, userToken);
+                    if (success) {
+                      await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'SUCCESS', null, userId);
+                    } else {
+                      await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'FAILED', 'Meta API Send Failed', userId);
+                    }
+                  }
+                } else {
+                  consoleLog('INFO', `Comment text does not match trigger keywords.`);
+                }
+              } catch (err) {
+                consoleLog('ERROR', `Error processing comment: ${err.message}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    return res.status(200).send('EVENT_RECEIVED');
+  }
+  res.sendStatus(404);
+});
+
+// ─── EMAIL CAPTURE CONVERSATION STATE MACHINE ───
+async function handleInboundDm(senderId, text, token, userId) {
+  try {
+    const stateRecord = await dbHelper.getConversationState(senderId);
+    if (!stateRecord || stateRecord.state !== 'AWAITING_EMAIL') return;
+
+    const mediaId = stateRecord.media_id;
+    const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
+    const cleanText = text.trim();
+
+    // Check for Skip command
+    if (cleanText.toLowerCase() === 'skip') {
+      consoleLog('SYSTEM', `User skipped email verification. Dispatching DM link.`);
+      await dbHelper.clearConversationState(senderId);
+      
+      const recipient = { id: senderId };
+      await sendInstagramDmDirect(recipient, rule.dm_message, token);
+      await dbHelper.logAutomationRun(mediaId, senderId, '[Email skipped]', 'SUCCESS', null, userId);
+      return;
+    }
+
+    // Email regex validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isValidEmail = emailRegex.test(cleanText);
+
+    if (isValidEmail) {
+      consoleLog('SYSTEM', `Valid email captured: ${cleanText}. Saving to leads contacts...`);
+      
+      await dbHelper.saveContactEmail(senderId, cleanText, userId);
+      await dbHelper.clearConversationState(senderId);
+
+      const confirmMsg = `Awesome! Email saved. Here is your access link:`;
+      const recipient = { id: senderId };
+      await sendInstagramDmDirect(recipient, confirmMsg, token);
+      await sendInstagramDmDirect(recipient, rule.dm_message, token);
+
+      await dbHelper.logAutomationRun(mediaId, senderId, `[Email: ${cleanText}]`, 'SUCCESS', null, userId);
+    } else {
+      consoleLog('SYSTEM', `Invalid email format submitted: "${cleanText}". Retrying...`);
+      const retryPrompt = `That doesn't look like a valid email. Please try again, or type "skip" to bypass.`;
+      const recipient = { id: senderId };
+      await sendInstagramDmDirect(recipient, retryPrompt, token);
+    }
+  } catch (err) {
+    consoleLog('ERROR', `Error handling inbound DM state: ${err.message}`);
+  }
+}
+
+// ─── AUXILIARY DM API SENDERS (now accept token parameter) ───
+
+// Reply to a public comment
+async function sendPublicCommentReply(commentId, replyText, token) {
+  if (!token) return;
+
+  try {
+    const url = `https://graph.facebook.com/v20.0/${commentId}/replies?message=${encodeURIComponent(replyText)}&access_token=${token}`;
+    await axios.post(url);
+    consoleLog('SYSTEM', `Posted public comment reply: "${replyText}"`);
+  } catch (err) {
+    consoleLog('ERROR', `Failed to write public comment reply: ${err.message}`);
+  }
+}
+
+// Direct DM using comment_id (first message link)
+async function sendInstagramDm(commentId, messageText, token) {
+  if (!token) return false;
+
+  try {
+    const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${token}`;
+    const payload = {
+      recipient: { comment_id: commentId },
+      message: { text: messageText }
+    };
+    const response = await axios.post(url, payload);
+    return Boolean(response.data && response.data.message_id);
+  } catch (error) {
+    consoleLog('ERROR', `DM Send Failed: ${error.message}`);
+    return false;
+  }
+}
+
+// Direct DM using conversation IGSID (subsequent replies)
+async function sendInstagramDmDirect(recipient, messageText, token) {
+  if (!token) return false;
+
+  try {
+    const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${token}`;
+    const payload = {
+      recipient: recipient,
+      message: { text: messageText }
+    };
+    const response = await axios.post(url, payload);
+    return Boolean(response.data && response.data.message_id);
+  } catch (error) {
+    consoleLog('ERROR', `DM Direct Send Failed: ${error.message}`);
+    return false;
+  }
+}
+
+// ─── API ENDPOINTS FOR CREATOR DASHBOARD (all auth-protected & user-scoped) ───
+
+// Sync/fetch latest Reels from Instagram Graph API
+app.post('/api/media/sync', requireAuth, async (req, res) => {
+  try {
+    const user = await dbHelper.getUserById(req.userId);
+    
+    if (!user || !user.page_access_token_enc) {
+      return res.status(400).json({ success: false, error: 'Instagram not connected. Please connect your Instagram account first.' });
+    }
+
+    const token = decrypt(user.page_access_token_enc);
+    consoleLog('SYSTEM', `Initiating Instagram media sync for user ${req.userId}...`);
+    
+    // 1. Get linked Instagram Business Account ID
+    const pageUrl = `https://graph.facebook.com/v20.0/me?fields=instagram_business_account{id,username}&access_token=${token}`;
+    const pageRes = await axios.get(pageUrl);
+    
+    if (!pageRes.data.instagram_business_account) {
+      return res.status(400).json({ success: false, error: 'No connected Instagram Business account found on this Page.' });
+    }
+
+    const igAccountId = pageRes.data.instagram_business_account.id;
+    const igUsername = pageRes.data.instagram_business_account.username;
+    consoleLog('SYSTEM', `Linked Instagram account ID: ${igAccountId} (@${igUsername})`);
+
+    // 2. Fetch latest Reels/posts
+    const mediaUrl = `https://graph.facebook.com/v20.0/${igAccountId}/media?fields=id,media_type,media_url,thumbnail_url,permalink,caption,timestamp&limit=25&access_token=${token}`;
+    const mediaRes = await axios.get(mediaUrl);
+    const mediaPosts = mediaRes.data.data || [];
+
+    // 3. Cache inside SQLite (user-scoped)
+    await dbHelper.saveMediaPosts(mediaPosts, req.userId);
+    consoleLog('SYSTEM', `Cached ${mediaPosts.length} posts for user ${req.userId}.`);
+
+    // 4. Resolve NEXT post scopes if media ID is empty
+    if (mediaPosts.length > 0) {
+      const latestPostId = mediaPosts[0].id;
+      const nextRule = await dbHelper.dbGet(`SELECT * FROM automations WHERE scope_type = 'NEXT' AND (user_id = ? OR user_id IS NULL) LIMIT 1`, [req.userId]);
+      
+      if (nextRule && !nextRule.media_id) {
+        consoleLog('SYSTEM', `Resolving 'NEXT' scope automation rule. Binding to latest synced Reel: ${latestPostId}`);
+        await dbHelper.saveAutomationRule(
+          latestPostId,
+          nextRule.trigger_word,
+          nextRule.dm_message,
+          nextRule.is_active,
+          nextRule.ask_for_follow,
+          'SPECIFIC',
+          nextRule.excluded_keywords,
+          nextRule.public_replies,
+          nextRule.collect_email,
+          req.userId
+        );
+      }
+    }
+
+    res.json({ success: true, count: mediaPosts.length });
+  } catch (error) {
+    const errorMsg = error.response && error.response.data ? JSON.stringify(error.response.data) : error.message;
+    consoleLog('ERROR', `Failed to sync media: ${errorMsg}`);
+    res.status(500).json({ success: false, error: errorMsg });
+  }
+});
+
+// List cached Media posts (user-scoped)
+app.get('/api/media', requireAuth, async (req, res) => {
+  try {
+    const posts = await dbHelper.getAllMediaPosts(req.userId);
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Configuration (user-scoped)
+app.get('/api/config', requireAuth, async (req, res) => {
+  try {
+    const user = await dbHelper.getUserById(req.userId);
+    const configData = await dbHelper.getAutomationConfig(req.userId);
+    res.json({
+      success: true,
+      ...configData,
+      verifyToken: VERIFY_TOKEN,
+      hasTokenConfigured: Boolean(user && user.page_access_token_enc)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Save / Update Automation Rule (user-scoped)
+app.post('/api/config', requireAuth, async (req, res) => {
+  const { mediaId, triggerWord, dmMessage, isActive, askForFollow, scopeType, excludedKeywords, publicReplies, collectEmail } = req.body;
+  
+  if (!mediaId || !triggerWord || !dmMessage) {
+    return res.status(400).json({ success: false, error: 'Missing required fields: mediaId, triggerWord, dmMessage' });
+  }
+
+  try {
+    await dbHelper.saveAutomationRule(
+      mediaId,
+      triggerWord,
+      dmMessage,
+      isActive !== undefined ? isActive : 1,
+      askForFollow !== undefined ? askForFollow : 0,
+      scopeType || 'SPECIFIC',
+      excludedKeywords || '',
+      publicReplies || '',
+      collectEmail !== undefined ? collectEmail : 0,
+      req.userId
+    );
+    consoleLog('SYSTEM', `Automation rule updated for media: ${mediaId} (user ${req.userId})`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete Automation Rule
+app.delete('/api/config/:mediaId', requireAuth, async (req, res) => {
+  const mediaId = req.params.mediaId;
+  try {
+    await dbHelper.deleteAutomationRule(mediaId);
+    consoleLog('SYSTEM', `Automation rule deleted/reset for media: ${mediaId}`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get Leads Contacts (user-scoped)
+app.get('/api/contacts', requireAuth, async (req, res) => {
+  try {
+    const contacts = await dbHelper.getAllContacts(req.userId);
+    res.json(contacts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Logs (user-scoped)
+app.get('/api/logs', requireAuth, async (req, res) => {
+  try {
+    const logs = await dbHelper.getLogs(100, req.userId);
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clear Logs (user-scoped)
+app.post('/api/logs/clear', requireAuth, async (req, res) => {
+  try {
+    await dbHelper.clearLogs(req.userId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Analytics Statistics (user-scoped)
+app.get('/api/analytics', requireAuth, async (req, res) => {
+  try {
+    const summary = await dbHelper.getAnalyticsSummary(req.userId);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── SIMULATION TRIGGER FOR LOCAL TESTING ───
+app.post('/api/simulate-comment', requireAuth, async (req, res) => {
+  const { username, commentText, mediaId } = req.body;
+  const targetMediaId = mediaId || 'DEFAULT';
+  const mockCommentId = 'mock_comment_' + Math.floor(Math.random() * 1000000);
+  const mockCommenterId = 'mock_user_' + Math.floor(Math.random() * 1000000);
+
+  consoleLog('SYSTEM', `Simulating comment from @${username || 'test_user'} on Media ${targetMediaId}: "${commentText || ''}"`);
+
+  try {
+    // Get user's token for simulation
+    const user = await dbHelper.getUserById(req.userId);
+    let token = null;
+    if (user && user.page_access_token_enc) {
+      token = decrypt(user.page_access_token_enc);
+    }
+
+    const rule = await dbHelper.getAutomationForMedia(targetMediaId, req.userId);
+    
+    if (!rule || rule.is_active === 0) {
+      return res.json({ success: true, matched: false, message: 'No active rule or fallback configured.' });
+    }
+
+    // Check Excluded Keywords
+    if (rule.excluded_keywords) {
+      const exclusions = rule.excluded_keywords.split(',').map(k => k.trim().toLowerCase());
+      const lowercaseComment = (commentText || '').toLowerCase();
+      const isExcluded = exclusions.some(word => lowercaseComment.includes(word));
+      
+      if (isExcluded) {
+        consoleLog('INFO', `Simulation matches excluded keyword. Skipping reply.`);
+        await dbHelper.logAutomationRun(targetMediaId, username || 'test_user', commentText, 'SKIPPED', 'Excluded keyword matched', req.userId);
+        return res.json({ success: true, matched: false, message: 'Simulation skipped: matches excluded keyword.' });
+      }
+    }
+
+    // Match Keywords
+    const triggers = rule.trigger_word.split(',').map(t => t.trim().toLowerCase());
+    const cleanComment = (commentText || '').toLowerCase().trim();
+    const isMatched = triggers.some(trigger => {
+      const matchRegex = new RegExp(`\\b${trigger}\\b`, 'i');
+      return matchRegex.test(cleanComment) || cleanComment.includes(trigger);
+    });
+
+    if (isMatched) {
+      consoleLog('INFO', `Simulation matched rule keyword! Processing simulated reply...`);
+      
+      // Public reply simulation
+      if (rule.public_replies) {
+        const replies = rule.public_replies.split(',');
+        const randomReply = replies[Math.floor(Math.random() * replies.length)].trim();
+        consoleLog('SYSTEM', `Simulated public comment reply: "${randomReply}"`);
+      }
+
+      // Follow Check simulation
+      if (rule.ask_for_follow === 1) {
+        consoleLog('SYSTEM', 'Follow gate active. Sending simulated follow prompt.');
+      }
+
+      // Email capture simulation
+      if (rule.collect_email === 1) {
+        const cachedEmail = await dbHelper.getContactEmail(username || 'test_user');
+        
+        if (cachedEmail) {
+          consoleLog('INFO', `Email already cached: ${cachedEmail}. Dispatching DM link.`);
+          const success = token ? await sendInstagramDm(mockCommentId, rule.dm_message, token) : false;
+          
+          if (success) {
+            await dbHelper.logAutomationRun(targetMediaId, username || 'test_user', commentText, 'SUCCESS', null, req.userId);
+          } else {
+            await dbHelper.logAutomationRun(targetMediaId, username || 'test_user', commentText, 'FAILED', 'Meta API Send Failed', req.userId);
+          }
+
+          return res.json({
+            success: true,
+            matched: true,
+            message: 'Simulation matched! Email was already cached, DM link dispatched.',
+            mockCommentId
+          });
+        } else {
+          consoleLog('INFO', 'Email capture active. Storing conversation state.');
+          await dbHelper.setConversationState(mockCommenterId, 'AWAITING_EMAIL', targetMediaId, req.userId);
+          
+          return res.json({
+            success: true,
+            matched: true,
+            needsEmail: true,
+            mockSenderId: mockCommenterId,
+            message: 'Simulation matched! Conversation set to AWAITING_EMAIL. Drop an email using the simulator DM inputs.',
+            mockCommentId
+          });
+        }
+      } else {
+        const success = token ? await sendInstagramDm(mockCommentId, rule.dm_message, token) : false;
+        if (success) {
+          await dbHelper.logAutomationRun(targetMediaId, username || 'test_user', commentText, 'SUCCESS', null, req.userId);
+        } else {
+          await dbHelper.logAutomationRun(targetMediaId, username || 'test_user', commentText, 'FAILED', 'Meta API Send Failed', req.userId);
+        }
+
+        return res.json({
+          success: true,
+          matched: true,
+          message: success ? 'Simulation matched and DM sent successfully!' : 'Simulation matched, but live DM sending failed (check your token).',
+          mockCommentId
+        });
+      }
+    } else {
+      consoleLog('INFO', `Simulation did not match triggers.`);
+      return res.json({
+        success: true,
+        matched: false,
+        message: `Simulation complete: comment did not match trigger keyword.`
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Simulation endpoint for replying to email capture prompt
+app.post('/api/simulate-dm', requireAuth, async (req, res) => {
+  const { senderId, messageText } = req.body;
+  if (!senderId || !messageText) {
+    return res.status(400).json({ success: false, error: 'Missing senderId or messageText.' });
+  }
+
+  try {
+    // Get user's token for simulation
+    const user = await dbHelper.getUserById(req.userId);
+    let token = null;
+    if (user && user.page_access_token_enc) {
+      token = decrypt(user.page_access_token_enc);
+    }
+
+    consoleLog('SYSTEM', `Simulating DM reply from sender ${senderId}: "${messageText}"`);
+    await handleInboundDm(senderId, messageText, token, req.userId);
+    res.json({ success: true, message: 'DM simulation parsed.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Automatically subscribe Page to Webhooks if PAGE_ACCESS_TOKEN is configured in environment
+async function autoSubscribePage() {
+  const envToken = process.env.PAGE_ACCESS_TOKEN;
+  if (envToken && !envToken.includes('your_meta_page_access_token')) {
+    try {
+      consoleLog('SYSTEM', 'Attempting to automatically subscribe Page to the App...');
+      // 1. Get Page ID
+      const meUrl = `https://graph.facebook.com/v20.0/me?fields=id,name&access_token=${envToken}`;
+      const meRes = await axios.get(meUrl);
+      const pageId = meRes.data.id;
+      const pageName = meRes.data.name;
+      consoleLog('SYSTEM', `Resolved Page: "${pageName}" (ID: ${pageId})`);
+
+      // 2. Subscribe Page to Webhook events
+      const subscribeUrl = `https://graph.facebook.com/v20.0/${pageId}/subscribed_apps`;
+      const subscribeRes = await axios.post(subscribeUrl, null, {
+        params: {
+          subscribed_fields: 'messages,comments,mention',
+          access_token: envToken
+        }
+      });
+      
+      if (subscribeRes.data && subscribeRes.data.success) {
+        consoleLog('SYSTEM', `Successfully subscribed Page "${pageName}" to the Webhook events!`);
+      } else {
+        consoleLog('WARN', `Subscription response: ${JSON.stringify(subscribeRes.data)}`);
+      }
+    } catch (err) {
+      const errorMsg = err.response && err.response.data ? JSON.stringify(err.response.data) : err.message;
+      consoleLog('ERROR', `Auto-subscription failed: ${errorMsg}`);
+    }
+  } else {
+    consoleLog('SYSTEM', 'No environment PAGE_ACCESS_TOKEN found to auto-subscribe.');
+  }
+}
+
+// Start Server
+app.listen(PORT, () => {
+  consoleLog('SYSTEM', `profileyou SaaS Engine running on port ${PORT}`);
+  consoleLog('SYSTEM', `Webhook Verification Endpoint: http://localhost:${PORT}/webhook`);
+  consoleLog('SYSTEM', `Webhook Verification Token: "${VERIFY_TOKEN}"`);
+  consoleLog('SYSTEM', `Dashboard: http://localhost:${PORT}`);
+  
+  // Trigger auto-subscription
+  autoSubscribePage();
+});
+
