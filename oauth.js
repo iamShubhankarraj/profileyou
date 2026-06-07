@@ -132,7 +132,7 @@ function mountOAuthRoutes(app) {
         const subscribeUrl = `https://graph.facebook.com/v20.0/${pageId}/subscribed_apps`;
         await axios.post(subscribeUrl, null, {
           params: {
-            subscribed_fields: 'messages,comments,mention',
+            subscribed_fields: 'messages,mention',
             access_token: pageAccessToken
           }
         });
