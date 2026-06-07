@@ -100,9 +100,17 @@ app.get('/login.html', (req, res) => {
 // Serve Static Frontend Dashboard
 app.use(express.static(path.join(__dirname, 'public')));
 
+const fs = require('fs');
+
 // Simple logger console helper
 const consoleLog = (type, message) => {
+  const logLine = `[${new Date().toISOString()}] [${type}] ${message}\n`;
   console.log(`[${type}] ${message}`);
+  try {
+    fs.appendFileSync(path.join(__dirname, 'app.log'), logLine);
+  } catch (err) {
+    // Ignore log writing errors
+  }
 };
 
 // ─── META WEBHOOK VERIFICATION (GET /webhook) ───
@@ -757,6 +765,23 @@ app.get('/api/contacts', requireAuth, async (req, res) => {
     res.json(contacts);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Get runtime console logs for debugging in production
+app.get('/api/debug-logs', async (req, res) => {
+  try {
+    const logPath = path.join(__dirname, 'app.log');
+    if (!fs.existsSync(logPath)) {
+      return res.status(200).send('No logs recorded yet.');
+    }
+    const logContent = fs.readFileSync(logPath, 'utf8');
+    // return last 50 lines
+    const lines = logContent.split('\n');
+    const tailLines = lines.slice(-50).join('\n');
+    res.type('text/plain').send(tailLines);
+  } catch (err) {
+    res.status(500).send(`Error reading logs: ${err.message}`);
   }
 });
 
