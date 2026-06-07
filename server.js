@@ -1003,7 +1003,7 @@ async function autoSubscribePage() {
       const subscribeUrl = `https://graph.facebook.com/v20.0/${pageId}/subscribed_apps`;
       const subscribeRes = await axios.post(subscribeUrl, null, {
         params: {
-          subscribed_fields: 'messages,mention',
+          subscribed_fields: 'messages,messaging_postbacks,mention,feed',
           access_token: envToken
         }
       });
