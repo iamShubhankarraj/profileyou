@@ -193,10 +193,16 @@ app.post('/webhook', async (req, res) => {
               continue;
             }
 
-            // B. Detect Quick Reply button taps
+            // B. Detect Quick Reply / Postback button taps
+            let qrPayload = null;
             if (message && message.quick_reply) {
-              const qrPayload = message.quick_reply.payload;
-              consoleLog('WEBHOOK', `Quick Reply tapped by Sender ID ${senderId} with payload: "${qrPayload}"`);
+              qrPayload = message.quick_reply.payload;
+            } else if (msgEvent.postback) {
+              qrPayload = msgEvent.postback.payload;
+            }
+
+            if (qrPayload) {
+              consoleLog('WEBHOOK', `Button tapped by Sender ID ${senderId} with payload: "${qrPayload}"`);
               
               if (qrPayload.startsWith('CHECK_FOLLOW_AGAIN_')) {
                 const targetMediaId = qrPayload.replace('CHECK_FOLLOW_AGAIN_', '');
@@ -418,7 +424,10 @@ async function handleInboundDm(senderId, text, token, userId) {
     if (isValidEmail) {
       consoleLog('SYSTEM', `Valid email captured: ${cleanText}. Saving to leads contacts...`);
       
-      await dbHelper.saveContactEmail(senderId, cleanText, userId);
+      const resolvedUsername = await resolveInstagramUsername(senderId, token);
+      const dbUsername = resolvedUsername !== 'unknown' ? resolvedUsername : senderId;
+      
+      await dbHelper.saveContactEmail(dbUsername, cleanText, userId);
       await dbHelper.clearConversationState(senderId);
 
       const confirmMsg = [
@@ -503,6 +512,19 @@ async function handleSkipEmail(senderId, mediaId, token, userId) {
     await dbHelper.logAutomationRun(mediaId, senderId, '[Email skipped via Quick Reply]', 'SUCCESS', null, userId);
   } catch (err) {
     consoleLog('ERROR', `Error handling Skip Email via quick reply: ${err.message}`);
+  }
+}
+
+// Resolve Instagram username from IGSID
+async function resolveInstagramUsername(userId, token) {
+  if (!userId || !token) return 'unknown';
+  try {
+    const url = `https://graph.facebook.com/v20.0/${userId}?fields=username&access_token=${token}`;
+    const res = await axios.get(url);
+    return res.data.username || 'unknown';
+  } catch (err) {
+    consoleLog('WARN', `Failed to resolve username for IGSID ${userId}: ${err.message}`);
+    return 'unknown';
   }
 }
 
