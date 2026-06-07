@@ -169,6 +169,7 @@ app.post('/webhook', async (req, res) => {
           for (const msgEvent of entry.messaging) {
             const senderId = msgEvent.sender ? msgEvent.sender.id : null;
             const message = msgEvent.message;
+            consoleLog('WEBHOOK', `Received direct message from Sender ID ${senderId}: "${message ? message.text : '[No Text]'}"`);
             if (senderId && message && message.text) {
               await handleInboundDm(senderId, message.text, userToken, userId);
             }
@@ -318,6 +319,7 @@ app.post('/webhook', async (req, res) => {
 async function handleInboundDm(senderId, text, token, userId) {
   try {
     const stateRecord = await dbHelper.getConversationState(senderId);
+    consoleLog('SYSTEM', `Inbound DM state lookup for Sender ${senderId}: ${stateRecord ? stateRecord.state : 'NOT_FOUND'}`);
     if (!stateRecord || stateRecord.state !== 'AWAITING_EMAIL') return;
 
     const mediaId = stateRecord.media_id;
