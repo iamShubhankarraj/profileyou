@@ -587,7 +587,13 @@ async function sendInstagramDm(commentId, messageText, token, quickReplies = nul
       payload.message.quick_replies = quickReplies;
     }
     const response = await axios.post(url, payload);
-    return Boolean(response.data && response.data.message_id);
+    const success = Boolean(response.data && response.data.message_id);
+    if (success) {
+      consoleLog('SYSTEM', `DM sent successfully to comment ${commentId}! Msg ID: ${response.data.message_id}`);
+    } else {
+      consoleLog('WARN', `DM send returned success but no message_id: ${JSON.stringify(response.data)}`);
+    }
+    return success;
   } catch (error) {
     consoleLog('ERROR', `DM Send Failed: ${error.message} - ${error.response ? JSON.stringify(error.response.data) : ''}`);
     return false;
@@ -608,7 +614,13 @@ async function sendInstagramDmDirect(recipient, messageText, token, quickReplies
       payload.message.quick_replies = quickReplies;
     }
     const response = await axios.post(url, payload);
-    return Boolean(response.data && response.data.message_id);
+    const success = Boolean(response.data && response.data.message_id);
+    if (success) {
+      consoleLog('SYSTEM', `Direct DM sent successfully to ${JSON.stringify(recipient)}! Msg ID: ${response.data.message_id}`);
+    } else {
+      consoleLog('WARN', `Direct DM send returned success but no message_id: ${JSON.stringify(response.data)}`);
+    }
+    return success;
   } catch (error) {
     consoleLog('ERROR', `DM Direct Send Failed: ${error.message} - ${error.response ? JSON.stringify(error.response.data) : ''}`);
     return false;
