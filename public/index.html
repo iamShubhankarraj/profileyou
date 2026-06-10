@@ -28,6 +28,7 @@
       --accent-red-bg: rgba(239, 68, 68, 0.08);
       --accent-green: #10b981;
       --accent-green-bg: rgba(16, 185, 129, 0.08);
+      --accent-pink: #db2777;
       --accent-yellow: #f59e0b;
       --accent-yellow-bg: rgba(245, 158, 11, 0.08);
       
@@ -69,6 +70,20 @@
       top: 0;
       z-index: 100;
       border-right: 1px solid rgba(255, 255, 255, 0.03);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .sidebar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .sidebar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
     }
 
     .brand-container {
@@ -1349,6 +1364,77 @@
     .switch-toggle-input:checked + .switch-toggle-label::after {
       transform: translateX(20px);
     }
+
+    /* ─── MOBILE RESPONSIVE LAYOUT OVERRIDES ─── */
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+        min-height: auto;
+      }
+
+      .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+        max-height: none;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding: 16px;
+      }
+
+      .main-content {
+        margin-left: 0;
+        padding: 24px;
+        max-width: 100%;
+      }
+
+      .metrics-row {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .campaigns-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+      }
+
+      .growth-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .tabs-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .tabs-right-links {
+        display: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .metrics-row {
+        grid-template-columns: 1fr;
+      }
+
+      .main-content {
+        padding: 16px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1956,6 +2042,8 @@
         await fetchContacts();
       } catch (err) {
         console.error('Error fetching configurations:', err);
+        updateStatusIndicator(false);
+        addLog('SYSTEM', 'Dashboard failed to reach API. Server may be offline.');
       }
     }
 
