@@ -1687,6 +1687,12 @@
                 <option value="DEFAULT">Default Fallback Rule</option>
               </select>
             </div>
+            
+            <!-- Simulate follow toggle -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+              <span style="font-size: 11.5px; color: var(--text-secondary); font-weight: 500;">Simulate Following Creator</span>
+              <input type="checkbox" id="sim-follow-status" style="width: 15px; height: 15px; accent-color: var(--accent-purple); cursor: pointer;">
+            </div>
 
             <!-- Vertical iOS Mockup Device -->
             <div class="phone-mockup">
@@ -2347,11 +2353,23 @@
           </div>
         `).join('');
       } else {
-        phoneScreenBody.innerHTML = simulatedDMs.map(m => `
-          <div class="phone-chat-bubble ${m.sender}">
-            ${escapeHtml(m.text)}
-          </div>
-        `).join('');
+        phoneScreenBody.innerHTML = simulatedDMs.map(m => {
+          let html = `<div class="phone-chat-bubble ${m.sender}">
+            <div style="white-space: pre-wrap;">${escapeHtml(m.text)}</div>`;
+          if (m.buttons && m.buttons.length > 0) {
+            html += `<div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">`;
+            m.buttons.forEach(btn => {
+              if (btn.type === 'web_url') {
+                html += `<a href="${btn.url}" target="_blank" class="btn btn-secondary btn-sm" style="font-size: 11px; text-align: center; justify-content: center; width: 100%; border-color: rgba(255,255,255,0.15); display: inline-flex; height: 28px; line-height: 28px; padding: 0; align-items: center; text-decoration: none;">${escapeHtml(btn.title)}</a>`;
+              } else {
+                html += `<button onclick="triggerSimulatedPostback('${btn.payload}')" class="btn btn-primary-glow btn-sm" style="font-size: 11px; width: 100%; justify-content: center; background: rgba(168,85,247,0.15); border: 1px solid var(--accent-purple); height: 28px; padding: 0; display: inline-flex; align-items: center;">${escapeHtml(btn.title)}</button>`;
+              }
+            });
+            html += `</div>`;
+          }
+          html += `</div>`;
+          return html;
+        }).join('');
       }
       
       // Auto scroll to bottom
@@ -2388,14 +2406,18 @@
           simulatedDMs.push({ sender: 'bot', text: `💬 Instagram Comment Triggered: "@${username}: ${textVal}"` });
 
           if (data.matched) {
-            // Get active rule configurations
             const activeRule = mediaId === 'DEFAULT' ? defaultRule : (customRules[mediaId] || defaultRule);
             
-            if (activeRule.ask_for_follow === 1) {
-              simulatedDMs.push({ sender: 'bot', text: `Thanks for commenting! Please make sure to follow @subh.expp to receive the private link.` });
-            }
-
-            if (data.needsEmail) {
+            if (data.needsFollowCheck) {
+              simulatedDMs.push({
+                sender: 'bot',
+                text: data.message,
+                buttons: data.buttons || []
+              });
+              // Reset checkbox
+              document.getElementById('sim-follow-status').checked = false;
+              mockUserIsFollowing = false;
+            } else if (data.needsEmail) {
               currentMockSenderId = data.mockSenderId;
               simulatedDMs.push({ sender: 'bot', text: `Hey! Drop your email address below and I'll send you the guide right away! (Or type 'skip' to bypass).` });
             } else {
@@ -2470,6 +2492,50 @@
       if (e.key === 'Enter') submitPhoneAction();
     });
     phoneSendBtn.addEventListener('click', submitPhoneAction);
+
+    // Simulator follow state checking helper
+    let mockUserIsFollowing = false;
+    document.getElementById('sim-follow-status').addEventListener('change', (e) => {
+      mockUserIsFollowing = e.target.checked;
+    });
+
+    window.triggerSimulatedPostback = function(payload) {
+      simulatedDMs.push({ sender: 'user', text: 'I follow you! ✅' });
+      renderPhoneBody();
+      
+      const mediaId = simMediaSelect.value;
+      
+      fetch('/api/simulate-postback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          payload, 
+          senderId: currentMockSenderId || 'test_user_id', 
+          isFollowing: mockUserIsFollowing 
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          simulatedDMs.push({
+            sender: 'bot',
+            text: data.message,
+            buttons: data.buttons || []
+          });
+          if (data.isFollowing) {
+            const activeRule = mediaId === 'DEFAULT' ? defaultRule : (customRules[mediaId] || defaultRule);
+            if (activeRule.collect_email === 1) {
+              currentMockSenderId = 'test_user_id';
+              simulatedDMs.push({ sender: 'bot', text: `Hey! Drop your email address below and I'll send you the guide right away! (Or type 'skip' to bypass).` });
+            } else {
+              currentMockSenderId = null;
+              simulatedDMs.push({ sender: 'bot', text: activeRule.dm_message });
+            }
+          }
+          renderPhoneBody();
+        }
+      });
+    };
 
     // Initial phone screen loading state
     setPhoneTab('comments');

@@ -318,29 +318,30 @@ app.post('/webhook', async (req, res) => {
                     const isFollowing = await checkIfUserFollows(commenterId, userToken);
 
                     if (!isFollowing) {
-                      consoleLog('INFO', `@${commenterUsername} is not following. Sending follow nudge.`);
+                      consoleLog('INFO', `@${commenterUsername} is not following. Sending follow nudge template.`);
 
                       const followNudgeMsg = [
                         `Hey @${commenterUsername}! 👋`,
                         ``,
-                        `Thanks so much for your interest! 🙌`,
+                        `Thanks for commenting! To unlock your exclusive download link:`,
                         ``,
-                        `To get the exclusive link, just:`,
-                        ``,
-                        `1️⃣  Follow @${igUsername}`,
-                        `2️⃣  Tap the button below once you've followed!`,
-                        ``,
-                        `I'll send it over instantly! ✨`
+                        `1️⃣ Tap 'Follow Profile' below & follow`,
+                        `2️⃣ Return here & tap 'I follow you!' to receive your link!`
                       ].join('\n');
 
-                      const quickReplies = [
+                      const buttons = [
                         {
-                          content_type: 'text',
+                          type: 'web_url',
+                          url: `https://instagram.com/${igUsername}`,
+                          title: 'Follow Profile 📲'
+                        },
+                        {
+                          type: 'postback',
                           title: 'I follow you! ✅',
                           payload: `CLAIM_FOLLOWED_${mediaId}`
                         }
                       ];
-                      await sendInstagramDm(commentId, followNudgeMsg, userToken, quickReplies);
+                      await sendInstagramDmButtons({ comment_id: commentId }, followNudgeMsg, buttons, userToken);
                       await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'FOLLOW_PENDING', 'Awaiting follow', userId);
                       continue; // ← STOP here, do NOT send the real DM
                     }
@@ -469,6 +470,8 @@ async function handleClaimFollowed(senderId, mediaId, token, userId) {
     const isFollowing = await checkIfUserFollows(senderId, token);
     const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
     const recipient = { id: senderId };
+    const user = await dbHelper.getUserById(userId);
+    const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
 
     if (isFollowing) {
       const successMsg = [
@@ -484,17 +487,22 @@ async function handleClaimFollowed(senderId, mediaId, token, userId) {
       const stillNudgeMsg = [
         `Hmm, it looks like you are not following yet! 🧐`,
         ``,
-        `Please follow my page, then tap the button below to unlock your link!`
+        `Please follow my profile, then tap the button below to check again and unlock your link!`
       ].join('\n');
       
-      const quickReplies = [
+      const buttons = [
         {
-          content_type: 'text',
+          type: 'web_url',
+          url: `https://instagram.com/${igUsername}`,
+          title: 'Follow Profile 📲'
+        },
+        {
+          type: 'postback',
           title: 'I follow you! ✅',
           payload: `CLAIM_FOLLOWED_${mediaId}`
         }
       ];
-      await sendInstagramDmDirect(recipient, stillNudgeMsg, token, quickReplies);
+      await sendInstagramDmButtons(recipient, stillNudgeMsg, buttons, token);
       await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow - Failed]', 'FOLLOW_PENDING', 'User claimed follow but API returned false', userId);
     }
   } catch (err) {
@@ -557,6 +565,39 @@ async function checkIfUserFollows(userId, token) {
   } catch (err) {
     consoleLog('WARN', `Follow check API error: ${err.message}. Defaulting to fail-open.`);
     return true; // fail-open: don't block DMs if the API is having issues
+  }
+}
+
+// Send DM with buttons (link + postback) using comment_id or conversation IGSID
+async function sendInstagramDmButtons(recipient, messageText, buttons, token) {
+  if (!token) return false;
+
+  try {
+    const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${token}`;
+    const payload = {
+      recipient: recipient,
+      message: {
+        attachment: {
+          type: 'template',
+          payload: {
+            template_type: 'button',
+            text: messageText,
+            buttons: buttons
+          }
+        }
+      }
+    };
+    const response = await axios.post(url, payload);
+    const success = Boolean(response.data && response.data.message_id);
+    if (success) {
+      consoleLog('SYSTEM', `Button DM sent successfully to ${JSON.stringify(recipient)}! Msg ID: ${response.data.message_id}`);
+    } else {
+      consoleLog('WARN', `Button DM send returned success but no message_id: ${JSON.stringify(response.data)}`);
+    }
+    return success;
+  } catch (error) {
+    consoleLog('ERROR', `Button DM Send Failed: ${error.message} - ${error.response ? JSON.stringify(error.response.data) : ''}`);
+    return false;
   }
 }
 
@@ -889,6 +930,35 @@ app.post('/api/simulate-comment', requireAuth, async (req, res) => {
       // Follow Check simulation
       if (rule.ask_for_follow === 1) {
         consoleLog('SYSTEM', 'Follow gate active. Sending simulated follow prompt.');
+        const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
+        const followNudgeMsg = [
+          `Hey @${username || 'test_user'}! 👋`,
+          ``,
+          `Thanks for commenting! To unlock your exclusive download link:`,
+          ``,
+          `1️⃣ Tap 'Follow Profile' below & follow`,
+          `2️⃣ Return here & tap 'I follow you!' to receive your link!`
+        ].join('\n');
+
+        return res.json({
+          success: true,
+          matched: true,
+          needsFollowCheck: true,
+          message: followNudgeMsg,
+          buttons: [
+            {
+              type: 'web_url',
+              url: `https://instagram.com/${igUsername}`,
+              title: 'Follow Profile 📲'
+            },
+            {
+              type: 'postback',
+              title: 'I follow you! ✅',
+              payload: `CLAIM_FOLLOWED_${targetMediaId}`
+            }
+          ],
+          mockCommentId
+        });
       }
 
       // Email capture simulation
@@ -947,6 +1017,54 @@ app.post('/api/simulate-comment', requireAuth, async (req, res) => {
         message: `Simulation complete: comment did not match trigger keyword.`
       });
     }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Simulation endpoint for postback buttons (e.g. follow claim)
+app.post('/api/simulate-postback', requireAuth, async (req, res) => {
+  const { payload, senderId, isFollowing } = req.body;
+  if (!payload) {
+    return res.status(400).json({ success: false, error: 'Missing payload.' });
+  }
+
+  try {
+    const user = await dbHelper.getUserById(req.userId);
+    const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
+
+    if (payload.startsWith('CLAIM_FOLLOWED_')) {
+      const targetMediaId = payload.replace('CLAIM_FOLLOWED_', '');
+      const rule = await dbHelper.getAutomationForMedia(targetMediaId, req.userId);
+
+      if (isFollowing) {
+        return res.json({
+          success: true,
+          isFollowing: true,
+          message: `Awesome! Thanks for the follow! 🎉\n\nHere is your exclusive link 👇`,
+          dmMessage: rule.dm_message
+        });
+      } else {
+        return res.json({
+          success: true,
+          isFollowing: false,
+          message: `Hmm, it looks like you are not following yet! 🧐\n\nPlease follow my profile, then tap the button below to check again and unlock your link!`,
+          buttons: [
+            {
+              type: 'web_url',
+              url: `https://instagram.com/${igUsername}`,
+              title: 'Follow Profile 📲'
+            },
+            {
+              type: 'postback',
+              title: 'I follow you! ✅',
+              payload: `CLAIM_FOLLOWED_${targetMediaId}`
+            }
+          ]
+        });
+      }
+    }
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
