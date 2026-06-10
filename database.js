@@ -195,8 +195,8 @@ const initDatabase = async () => {
 
         // Insert default automation row if not exists
         sqliteDb.run(`
-          INSERT OR IGNORE INTO automations (id, media_id, trigger_word, dm_message, is_active, ask_for_follow, scope_type, excluded_keywords, public_replies, collect_email)
-          VALUES (1, 'DEFAULT', 'pipeline', 'Hey! Thanks for commenting. Here is the link to the Creator Pipeline files: https://gdrive.link/pipeline', 1, 0, 'ANY', '', 'Check your DMs!,Sent you the link! 📩,Sent! Check your inbox.', 0)
+          INSERT OR IGNORE INTO automations (media_id, trigger_word, dm_message, is_active, ask_for_follow, scope_type, excluded_keywords, public_replies, collect_email)
+          VALUES ('DEFAULT', 'pipeline', 'Hey! Thanks for commenting. Here is the link to the Creator Pipeline files: https://gdrive.link/pipeline', 1, 0, 'ANY', '', 'Check your DMs!,Sent you the link! 📩,Sent! Check your inbox.', 0)
         `);
 
         // Analytics logs table
@@ -276,9 +276,6 @@ const initDatabase = async () => {
           user_id INTEGER REFERENCES users(id)
         )
       `);
-      
-      try { await client.query(`ALTER TABLE media_posts ADD COLUMN thumbnail_url TEXT`); } catch(e) {}
-      try { await client.query(`ALTER TABLE media_posts ADD COLUMN user_id INTEGER REFERENCES users(id)`); } catch(e) {}
 
       await client.query(`
         CREATE TABLE IF NOT EXISTS automations (
@@ -295,16 +292,10 @@ const initDatabase = async () => {
           user_id INTEGER REFERENCES users(id)
         )
       `);
-      
-      try { await client.query(`ALTER TABLE automations ADD COLUMN scope_type TEXT DEFAULT 'SPECIFIC'`); } catch(e) {}
-      try { await client.query(`ALTER TABLE automations ADD COLUMN excluded_keywords TEXT`); } catch(e) {}
-      try { await client.query(`ALTER TABLE automations ADD COLUMN public_replies TEXT`); } catch(e) {}
-      try { await client.query(`ALTER TABLE automations ADD COLUMN collect_email INTEGER DEFAULT 0`); } catch(e) {}
-      try { await client.query(`ALTER TABLE automations ADD COLUMN user_id INTEGER REFERENCES users(id)`); } catch(e) {}
 
       await client.query(`
-        INSERT INTO automations (id, media_id, trigger_word, dm_message, is_active, ask_for_follow, scope_type, excluded_keywords, public_replies, collect_email)
-        VALUES (1, 'DEFAULT', 'pipeline', 'Hey! Thanks for commenting. Here is the link to the Creator Pipeline files: https://gdrive.link/pipeline', 1, 0, 'ANY', '', 'Check your DMs!,Sent you the link! 📩,Sent! Check your inbox.', 0)
+        INSERT INTO automations (media_id, trigger_word, dm_message, is_active, ask_for_follow, scope_type, excluded_keywords, public_replies, collect_email)
+        VALUES ('DEFAULT', 'pipeline', 'Hey! Thanks for commenting. Here is the link to the Creator Pipeline files: https://gdrive.link/pipeline', 1, 0, 'ANY', '', 'Check your DMs!,Sent you the link! 📩,Sent! Check your inbox.', 0)
         ON CONFLICT (media_id) DO NOTHING
       `);
 
@@ -320,8 +311,6 @@ const initDatabase = async () => {
           user_id INTEGER REFERENCES users(id)
         )
       `);
-      
-      try { await client.query(`ALTER TABLE analytics_logs ADD COLUMN user_id INTEGER REFERENCES users(id)`); } catch(e) {}
 
       await client.query(`
         CREATE TABLE IF NOT EXISTS contacts (
@@ -332,8 +321,6 @@ const initDatabase = async () => {
           user_id INTEGER REFERENCES users(id)
         )
       `);
-      
-      try { await client.query(`ALTER TABLE contacts ADD COLUMN user_id INTEGER REFERENCES users(id)`); } catch(e) {}
 
       await client.query(`
         CREATE TABLE IF NOT EXISTS conversation_states (
@@ -344,8 +331,6 @@ const initDatabase = async () => {
           user_id INTEGER REFERENCES users(id)
         )
       `);
-      
-      try { await client.query(`ALTER TABLE conversation_states ADD COLUMN user_id INTEGER REFERENCES users(id)`); } catch(e) {}
 
       await client.query('COMMIT');
     } catch (err) {
@@ -353,6 +338,26 @@ const initDatabase = async () => {
       throw err;
     } finally {
       client.release();
+    }
+
+    // Run migrations outside the main transaction block so any error (e.g. column already exists)
+    // does not abort the entire transaction.
+    const migrationClient = await pgPool.connect();
+    try {
+      try { await migrationClient.query(`ALTER TABLE media_posts ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE media_posts ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS scope_type TEXT DEFAULT 'SPECIFIC'`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS excluded_keywords TEXT`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS public_replies TEXT`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS collect_email INTEGER DEFAULT 0`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE analytics_logs ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)`); } catch(e) {}
+      try { await migrationClient.query(`ALTER TABLE conversation_states ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)`); } catch(e) {}
+    } catch (e) {
+      console.warn('[DATABASE WARNING] PostgreSQL column migrations encountered a warning:', e.message);
+    } finally {
+      migrationClient.release();
     }
   }
 };
