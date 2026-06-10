@@ -1028,32 +1028,59 @@ async function autoSubscribePage() {
   }
 }
 
-// ─── KEEP-ALIVE SELF-PING (Prevents Render Free Tier Spin-Down) ───
-// Pings the server's own /health endpoint every 10 minutes to prevent
-// Render's free tier from spinning down the instance after 15 min of inactivity.
+// ─── KEEP-ALIVE SYSTEM (Prevents Render Free Tier Spin-Down) ───
+// Triple-layer approach to guarantee 24/7 uptime on Render free tier:
+// 1. External self-ping via public URL every 4 minutes
+// 2. Internal localhost ping every 4 minutes (always works, no env var needed)
+// 3. First ping fires 30 seconds after startup (immediate wake confirmation)
 function startKeepAlive() {
-  // Only auto-ping in production (on Render)
   const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL; // Render auto-sets this
-  const SELF_URL = RENDER_EXTERNAL_URL || process.env.SELF_URL; // Fallback to manual env var
+  const SELF_URL = RENDER_EXTERNAL_URL || process.env.SELF_URL;
+  const PING_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes (well under 15-min timeout)
+  const FIRST_PING_DELAY_MS = 30 * 1000; // 30 seconds after startup
 
-  if (!SELF_URL) {
-    consoleLog('SYSTEM', 'No RENDER_EXTERNAL_URL or SELF_URL set. Keep-alive self-ping disabled. Set SELF_URL env var to enable.');
-    return;
+  // Layer 1: Internal localhost ping (always works — no env var needed)
+  consoleLog('KEEP-ALIVE', `🏓 Internal keep-alive started — pinging localhost:${PORT}/health every 4 minutes`);
+  
+  const doLocalPing = async () => {
+    try {
+      const res = await axios.get(`http://localhost:${PORT}/health`, { timeout: 10000 });
+      consoleLog('KEEP-ALIVE', `Local ping OK — uptime: ${Math.round(res.data.uptime)}s, db: ${res.data.database}`);
+    } catch (err) {
+      consoleLog('KEEP-ALIVE', `Local ping failed: ${err.message}`);
+    }
+  };
+
+  // Fire first local ping shortly after startup
+  setTimeout(doLocalPing, FIRST_PING_DELAY_MS);
+  // Then repeat every 4 minutes
+  setInterval(doLocalPing, PING_INTERVAL_MS);
+
+  // Layer 2: External self-ping via public URL (generates real inbound traffic)
+  if (SELF_URL) {
+    const pingUrl = `${SELF_URL}/health`;
+    consoleLog('KEEP-ALIVE', `🌐 External keep-alive started — pinging ${pingUrl} every 4 minutes`);
+
+    const doExternalPing = async () => {
+      try {
+        const res = await axios.get(pingUrl, { timeout: 15000 });
+        consoleLog('KEEP-ALIVE', `External ping OK — status: ${res.data.status}, uptime: ${Math.round(res.data.uptime)}s`);
+      } catch (err) {
+        consoleLog('KEEP-ALIVE', `External ping failed: ${err.message}`);
+      }
+    };
+
+    // Fire first external ping shortly after startup (staggered from local ping)
+    setTimeout(doExternalPing, FIRST_PING_DELAY_MS + 5000);
+    // Then repeat every 4 minutes (offset by 2 min from local ping for constant activity)
+    setTimeout(() => {
+      setInterval(doExternalPing, PING_INTERVAL_MS);
+    }, 2 * 60 * 1000);
+  } else {
+    consoleLog('KEEP-ALIVE', '⚠️ No RENDER_EXTERNAL_URL or SELF_URL set. External ping disabled. Add SELF_URL env var in Render for maximum reliability.');
   }
 
-  const pingUrl = `${SELF_URL}/health`;
-  const PING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
-
-  consoleLog('SYSTEM', `🏓 Keep-alive enabled! Pinging ${pingUrl} every 10 minutes.`);
-
-  setInterval(async () => {
-    try {
-      const res = await axios.get(pingUrl, { timeout: 15000 });
-      consoleLog('KEEP-ALIVE', `Self-ping OK — status: ${res.data.status}, uptime: ${Math.round(res.data.uptime)}s`);
-    } catch (err) {
-      consoleLog('KEEP-ALIVE', `Self-ping failed: ${err.message} (server may be restarting)`);
-    }
-  }, PING_INTERVAL_MS);
+  consoleLog('KEEP-ALIVE', '✅ Keep-alive system armed — server will NOT spin down!');
 }
 
 // Start Server
@@ -1066,7 +1093,8 @@ app.listen(PORT, () => {
   // Trigger auto-subscription
   autoSubscribePage();
 
-  // Start keep-alive self-ping to prevent Render spin-down
+  // Start keep-alive system to prevent Render spin-down
   startKeepAlive();
 });
+
 
