@@ -212,6 +212,12 @@ app.post('/webhook', async (req, res) => {
             if (qrPayload) {
               consoleLog('WEBHOOK', `Button tapped by Sender ID ${senderId} with payload: "${qrPayload}"`);
               
+              if (qrPayload.startsWith('UNLOCK_LINK_')) {
+                const targetMediaId = qrPayload.replace('UNLOCK_LINK_', '');
+                await handleUnlockLink(senderId, targetMediaId, userToken, userId);
+                continue;
+              }
+
               if (qrPayload.startsWith('CLAIM_FOLLOWED_')) {
                 const targetMediaId = qrPayload.replace('CLAIM_FOLLOWED_', '');
                 await handleClaimFollowed(senderId, targetMediaId, userToken, userId);
@@ -312,42 +318,28 @@ app.post('/webhook', async (req, res) => {
                     await sendPublicCommentReply(commentId, randomReply, userToken);
                   }
 
-                  // ── FOLLOW CHECK GATE ──
+                  // ── FOLLOW CHECK GATE (2-STEP: tap first, then verify via IGSID) ──
                   if (rule.ask_for_follow === 1) {
-                    const igUsername = user ? user.ig_username : 'subh.expp';
-                    let isFollowing = false;
-                    try {
-                      isFollowing = await checkIfUserFollows(commenterId, userToken);
-                    } catch (err) {
-                      consoleLog('WARN', `Initial comment follow check failed (consent/permission error expected): ${err.message}. Defaulting to false (nudge user).`);
-                      isFollowing = false;
-                    }
+                    consoleLog('INFO', `Follow gate active. Sending neutral unlock DM to @${commenterUsername} (follow check deferred to button tap).`);
 
-                    if (!isFollowing) {
-                      consoleLog('INFO', `@${commenterUsername} is not following. Sending follow nudge message with Quick Reply.`);
+                    const unlockMsg = [
+                      `Hey @${commenterUsername}! 👋`,
+                      ``,
+                      `Thanks for commenting! Your exclusive link is ready.`,
+                      ``,
+                      `Tap the button below to unlock it! 👇`
+                    ].join('\n');
 
-                      const followNudgeMsg = [
-                        `Hey @${commenterUsername}! 👋`,
-                        ``,
-                        `Thanks for commenting! To unlock your exclusive download link:`,
-                        ``,
-                        `1️⃣ Go to my profile @${igUsername} (or tap here: https://instagram.com/${igUsername}) and follow`,
-                        `2️⃣ Return here & tap 'I follow you!' below!`
-                      ].join('\n');
-
-                      const quickReplies = [
-                        {
-                          content_type: 'text',
-                          title: 'I follow you!',
-                          payload: `CLAIM_FOLLOWED_${mediaId}`
-                        }
-                      ];
-                      await sendInstagramDm(commentId, followNudgeMsg, userToken, quickReplies);
-                      await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'FOLLOW_PENDING', 'Awaiting follow', userId);
-                      continue; // ← STOP here, do NOT send the real DM
-                    }
-
-                    consoleLog('INFO', `@${commenterUsername} is following ✅. Proceeding to send DM.`);
+                    const quickReplies = [
+                      {
+                        content_type: 'text',
+                        title: 'Get my link!',
+                        payload: `UNLOCK_LINK_${mediaId}`
+                      }
+                    ];
+                    await sendInstagramDm(commentId, unlockMsg, userToken, quickReplies);
+                    await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'UNLOCK_PENDING', 'Awaiting button tap for follow verification', userId);
+                    continue; // ← STOP here, follow check happens on button tap
                   }
 
                   // ── EMAIL CAPTURE GATE ──
@@ -465,89 +457,137 @@ async function handleInboundDm(senderId, text, token, userId) {
   }
 }
 
-// Handle follow claim triggered by Quick Reply tap
-async function handleClaimFollowed(senderId, mediaId, token, userId) {
+// ── NEW: Handle "Get my link!" button tap — this is where we ACTUALLY check follow status ──
+async function handleUnlockLink(senderId, mediaId, token, userId) {
   try {
-    let isFollowing = false;
-    let apiError = false;
-    try {
-      isFollowing = await checkIfUserFollows(senderId, token);
-    } catch (err) {
-      consoleLog('WARN', `Follow check API failed on button tap: ${err.message}. Failing open to prevent stuck loop in production!`);
-      isFollowing = true;
-      apiError = true;
-    }
     const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
     const recipient = { id: senderId };
     const user = await dbHelper.getUserById(userId);
     const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
+    const commenterUsername = await resolveInstagramUsername(senderId, token);
+
+    // NOW we have the IGSID (senderId from messaging webhook) + consent → follow check works!
+    const isFollowing = await checkIfUserFollows(senderId, token);
+    consoleLog('INFO', `Follow check for @${commenterUsername} (IGSID ${senderId}): ${isFollowing}`);
 
     if (isFollowing) {
-      // 1. Send follow success confirmation
+      // ✅ FOLLOWER — deliver the link directly (or email gate if active)
+      await deliverLinkOrEmailGate(senderId, commenterUsername, mediaId, rule, token, userId);
+    } else {
+      // ❌ NOT FOLLOWING — send follow nudge
+      consoleLog('INFO', `@${commenterUsername} is NOT following. Sending follow nudge.`);
+      await sendFollowNudge(senderId, igUsername, mediaId, token, userId);
+    }
+  } catch (err) {
+    consoleLog('ERROR', `Error in handleUnlockLink: ${err.message}`);
+    // If follow check fails due to API issues, still try to deliver the link (fail-open for UX)
+    try {
+      const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
+      consoleLog('WARN', `Follow check failed. Failing open and delivering link to prevent stuck state.`);
+      await deliverLinkOrEmailGate(senderId, senderId, mediaId, rule, token, userId);
+    } catch (innerErr) {
+      consoleLog('ERROR', `Critical failure in handleUnlockLink fallback: ${innerErr.message}`);
+    }
+  }
+}
+
+// ── Handle "I followed!" re-verification button tap ──
+async function handleClaimFollowed(senderId, mediaId, token, userId) {
+  try {
+    const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
+    const recipient = { id: senderId };
+    const user = await dbHelper.getUserById(userId);
+    const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
+    const commenterUsername = await resolveInstagramUsername(senderId, token);
+
+    const isFollowing = await checkIfUserFollows(senderId, token);
+    consoleLog('INFO', `Re-check follow for @${commenterUsername}: ${isFollowing}`);
+
+    if (isFollowing) {
+      // ✅ Now following — deliver the link
       const successMsg = `Awesome! Thanks for the follow! 🎉`;
       await sendInstagramDmDirect(recipient, successMsg, token);
-
-      // 2. Check if we need to collect email
-      if (rule.collect_email === 1) {
-        const commenterUsername = await resolveInstagramUsername(senderId, token);
-        const cachedEmail = await dbHelper.getContactEmail(commenterUsername);
-
-        if (cachedEmail) {
-          consoleLog('INFO', `Email for @${commenterUsername} already cached. Dispatching DM link.`);
-          await sendInstagramDmDirect(recipient, rule.dm_message, token);
-          await dbHelper.logAutomationRun(mediaId, commenterUsername, '[Follow Verified]', 'SUCCESS', null, userId);
-        } else {
-          consoleLog('INFO', `Email capture active after follow check. Setting conversation state to AWAITING_EMAIL.`);
-          await dbHelper.setConversationState(senderId, 'AWAITING_EMAIL', mediaId, userId);
-
-          const emailPrompt = [
-            `Drop your email address below and I'll send you the details right away!`,
-            ``,
-            `⏩  Or tap the button below to get the link directly`
-          ].join('\n');
-
-          const quickReplies = [
-            {
-              content_type: 'text',
-              title: 'Skip & Get Link ⏩',
-              payload: `SKIP_EMAIL_${mediaId}`
-            }
-          ];
-          await sendInstagramDmDirect(recipient, emailPrompt, token, quickReplies);
-          await dbHelper.logAutomationRun(mediaId, commenterUsername, '[Follow Verified]', 'EMAIL_PENDING', 'Awaiting email address', userId);
-        }
-      } else {
-        // Just send the direct DM link
-        await sendInstagramDmDirect(recipient, rule.dm_message, token);
-        await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow - Success]', 'SUCCESS', null, userId);
-      }
+      await deliverLinkOrEmailGate(senderId, commenterUsername, mediaId, rule, token, userId);
     } else {
-      const stillNudgeMsg = [
-        `Hmm, it looks like you are not following yet! 🧐`,
-        ``,
-        `Please follow my profile @${igUsername} (or tap here: https://instagram.com/${igUsername})`,
-        ``,
-        `Then tap the button below to check again and unlock your link!`
-      ].join('\n');
-      
-      const buttons = [
-        {
-          type: 'web_url',
-          url: `https://instagram.com/${igUsername}`,
-          title: 'Follow Profile'
-        },
-        {
-          type: 'postback',
-          title: 'I follow you!',
-          payload: `CLAIM_FOLLOWED_${mediaId}`
-        }
-      ];
-      await sendInstagramDmButtons(recipient, stillNudgeMsg, buttons, token);
-      await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow - Failed]', 'FOLLOW_PENDING', 'User claimed follow but API returned false', userId);
+      // ❌ Still not following — re-nudge
+      await sendFollowNudge(senderId, igUsername, mediaId, token, userId);
     }
   } catch (err) {
     consoleLog('ERROR', `Error handling Claim Followed: ${err.message}`);
+    // Fail-open: deliver link if API is broken
+    try {
+      const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
+      consoleLog('WARN', `Re-check failed. Failing open and delivering link.`);
+      const recipient = { id: senderId };
+      await sendInstagramDmDirect(recipient, `Here's your link! 🎉`, token);
+      await sendInstagramDmDirect(recipient, rule.dm_message, token);
+      await dbHelper.logAutomationRun(mediaId, senderId, '[Follow re-check failed - fail-open]', 'SUCCESS', null, userId);
+    } catch (innerErr) {
+      consoleLog('ERROR', `Critical failure in handleClaimFollowed fallback: ${innerErr.message}`);
+    }
   }
+}
+
+// ── Shared helper: deliver link or start email collection ──
+async function deliverLinkOrEmailGate(senderId, commenterUsername, mediaId, rule, token, userId) {
+  const recipient = { id: senderId };
+
+  if (rule.collect_email === 1) {
+    const cachedEmail = await dbHelper.getContactEmail(commenterUsername);
+    if (cachedEmail) {
+      consoleLog('INFO', `Email for @${commenterUsername} already cached. Dispatching DM link.`);
+      await sendInstagramDmDirect(recipient, rule.dm_message, token);
+      await dbHelper.logAutomationRun(mediaId, commenterUsername, '[Verified]', 'SUCCESS', null, userId);
+    } else {
+      consoleLog('INFO', `Email capture active. Setting conversation state to AWAITING_EMAIL.`);
+      await dbHelper.setConversationState(senderId, 'AWAITING_EMAIL', mediaId, userId);
+
+      const emailPrompt = [
+        `Almost there! 🎉`,
+        ``,
+        `Drop your email address below and I'll send you the details right away!`,
+        ``,
+        `⏩  Or tap the button below to get the link directly`
+      ].join('\n');
+
+      const quickReplies = [
+        {
+          content_type: 'text',
+          title: 'Skip & Get Link',
+          payload: `SKIP_EMAIL_${mediaId}`
+        }
+      ];
+      await sendInstagramDmDirect(recipient, emailPrompt, token, quickReplies);
+      await dbHelper.logAutomationRun(mediaId, commenterUsername, '[Verified]', 'EMAIL_PENDING', 'Awaiting email', userId);
+    }
+  } else {
+    // No email gate — just send the link
+    await sendInstagramDmDirect(recipient, rule.dm_message, token);
+    await dbHelper.logAutomationRun(mediaId, commenterUsername || senderId, '[Verified]', 'SUCCESS', null, userId);
+  }
+}
+
+// ── Shared helper: send follow nudge with Quick Reply ──
+async function sendFollowNudge(senderId, igUsername, mediaId, token, userId) {
+  const recipient = { id: senderId };
+  const nudgeMsg = [
+    `It looks like you're not following yet! 🧐`,
+    ``,
+    `Please follow my profile @${igUsername}`,
+    `👉 https://instagram.com/${igUsername}`,
+    ``,
+    `Once you've followed, tap the button below to unlock your link!`
+  ].join('\n');
+
+  const quickReplies = [
+    {
+      content_type: 'text',
+      title: 'I followed!',
+      payload: `CLAIM_FOLLOWED_${mediaId}`
+    }
+  ];
+  await sendInstagramDmDirect(recipient, nudgeMsg, token, quickReplies);
+  await dbHelper.logAutomationRun(mediaId, senderId, '[Not following]', 'FOLLOW_PENDING', 'Nudged to follow', userId);
 }
 
 // Handle skipping email collection via Quick Reply tap
@@ -601,10 +641,10 @@ async function checkIfUserFollows(userId, token) {
     }
 
     consoleLog('WARN', `is_user_follow_business field missing in response. Defaulting to false.`);
-    return false; // fail-closed for stricter gatechecking
+    return false;
   } catch (err) {
-    consoleLog('WARN', `Follow check API error: ${err.message}. throwing error to caller.`);
-    throw err;
+    consoleLog('WARN', `Follow check API error: ${err.message}. Defaulting to false.`);
+    return false;
   }
 }
 
@@ -986,34 +1026,27 @@ app.post('/api/simulate-comment', requireAuth, async (req, res) => {
         consoleLog('SYSTEM', `Simulated public comment reply: "${randomReply}"`);
       }
 
-      // Follow Check simulation
+      // Follow Check simulation — send neutral "tap to unlock" (follow check deferred)
       if (rule.ask_for_follow === 1) {
-        consoleLog('SYSTEM', 'Follow gate active. Sending simulated follow prompt.');
-        const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
-        const followNudgeMsg = [
+        consoleLog('SYSTEM', 'Follow gate active. Sending simulated unlock prompt (follow check deferred to button tap).');
+        const unlockMsg = [
           `Hey @${username || 'test_user'}! 👋`,
           ``,
-          `Thanks for commenting! To unlock your exclusive download link:`,
+          `Thanks for commenting! Your exclusive link is ready.`,
           ``,
-          `1️⃣ Go to my profile @${igUsername} (or tap here: https://instagram.com/${igUsername}) and follow`,
-          `2️⃣ Return here & tap 'I follow you!' below!`
+          `Tap the button below to unlock it! 👇`
         ].join('\n');
 
         return res.json({
           success: true,
           matched: true,
           needsFollowCheck: true,
-          message: followNudgeMsg,
+          message: unlockMsg,
           buttons: [
             {
-              type: 'web_url',
-              url: `https://instagram.com/${igUsername}`,
-              title: 'Follow Profile'
-            },
-            {
               type: 'postback',
-              title: 'I follow you!',
-              payload: `CLAIM_FOLLOWED_${targetMediaId}`
+              title: 'Get my link!',
+              payload: `UNLOCK_LINK_${targetMediaId}`
             }
           ],
           mockCommentId
@@ -1081,7 +1114,7 @@ app.post('/api/simulate-comment', requireAuth, async (req, res) => {
   }
 });
 
-// Simulation endpoint for postback buttons (e.g. follow claim)
+// Simulation endpoint for postback buttons (e.g. unlock link, follow claim)
 app.post('/api/simulate-postback', requireAuth, async (req, res) => {
   const { payload, senderId, isFollowing } = req.body;
   if (!payload) {
@@ -1092,6 +1125,37 @@ app.post('/api/simulate-postback', requireAuth, async (req, res) => {
     const user = await dbHelper.getUserById(req.userId);
     const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
 
+    // Handle "Get my link!" tap — simulate follow check
+    if (payload.startsWith('UNLOCK_LINK_')) {
+      const targetMediaId = payload.replace('UNLOCK_LINK_', '');
+      const rule = await dbHelper.getAutomationForMedia(targetMediaId, req.userId);
+
+      if (isFollowing) {
+        // Follower — deliver link directly
+        return res.json({
+          success: true,
+          isFollowing: true,
+          message: `You're a follower — here's your exclusive link! 🎉`,
+          dmMessage: rule.dm_message
+        });
+      } else {
+        // Not following — send follow nudge
+        return res.json({
+          success: true,
+          isFollowing: false,
+          message: `It looks like you're not following yet! 🧐\n\nPlease follow my profile @${igUsername}\n👉 https://instagram.com/${igUsername}\n\nOnce you've followed, tap the button below to unlock your link!`,
+          buttons: [
+            {
+              type: 'postback',
+              title: 'I followed!',
+              payload: `CLAIM_FOLLOWED_${targetMediaId}`
+            }
+          ]
+        });
+      }
+    }
+
+    // Handle "I followed!" re-verification tap
     if (payload.startsWith('CLAIM_FOLLOWED_')) {
       const targetMediaId = payload.replace('CLAIM_FOLLOWED_', '');
       const rule = await dbHelper.getAutomationForMedia(targetMediaId, req.userId);
@@ -1107,16 +1171,11 @@ app.post('/api/simulate-postback', requireAuth, async (req, res) => {
         return res.json({
           success: true,
           isFollowing: false,
-          message: `Hmm, it looks like you are not following yet! 🧐\n\nPlease follow my profile @${igUsername} (or tap here: https://instagram.com/${igUsername})\n\nThen tap the button below to check again and unlock your link!`,
+          message: `It looks like you're not following yet! 🧐\n\nPlease follow my profile @${igUsername}\n👉 https://instagram.com/${igUsername}\n\nOnce you've followed, tap the button below!`,
           buttons: [
             {
-              type: 'web_url',
-              url: `https://instagram.com/${igUsername}`,
-              title: 'Follow Profile'
-            },
-            {
               type: 'postback',
-              title: 'I follow you!',
+              title: 'I followed!',
               payload: `CLAIM_FOLLOWED_${targetMediaId}`
             }
           ]
