@@ -603,29 +603,48 @@ async function sendInstagramDmButtons(recipient, messageText, buttons, token) {
 
   try {
     const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${token}`;
+    
+    // First, send the text instructions
+    try {
+      const textPayload = {
+        recipient: recipient,
+        message: { text: messageText }
+      };
+      await axios.post(url, textPayload);
+    } catch (e) {
+      consoleLog('WARN', `Text prefix send failed: ${e.message}`);
+    }
+
+    // Then send the Generic Template card containing the buttons (maximum compatibility on Instagram DM)
     const payload = {
       recipient: recipient,
       message: {
         attachment: {
           type: 'template',
           payload: {
-            template_type: 'button',
-            text: messageText,
-            buttons: buttons
+            template_type: 'generic',
+            elements: [
+              {
+                title: "Follow Gate 🔐",
+                subtitle: "Follow to unlock the download link instantly.",
+                buttons: buttons
+              }
+            ]
           }
         }
       }
     };
+
     const response = await axios.post(url, payload);
     const success = Boolean(response.data && response.data.message_id);
     if (success) {
-      consoleLog('SYSTEM', `Button DM sent successfully to ${JSON.stringify(recipient)}! Msg ID: ${response.data.message_id}`);
+      consoleLog('SYSTEM', `Buttons sent successfully to ${JSON.stringify(recipient)}! Msg ID: ${response.data.message_id}`);
     } else {
-      consoleLog('WARN', `Button DM send returned success but no message_id: ${JSON.stringify(response.data)}`);
+      consoleLog('WARN', `Buttons send returned success but no message_id: ${JSON.stringify(response.data)}`);
     }
     return success;
   } catch (error) {
-    consoleLog('ERROR', `Button DM Send Failed: ${error.message} - ${error.response ? JSON.stringify(error.response.data) : ''}`);
+    consoleLog('ERROR', `Buttons Send Failed: ${error.message} - ${error.response ? JSON.stringify(error.response.data) : ''}`);
     return false;
   }
 }
