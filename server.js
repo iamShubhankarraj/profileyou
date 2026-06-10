@@ -1028,6 +1028,34 @@ async function autoSubscribePage() {
   }
 }
 
+// ─── KEEP-ALIVE SELF-PING (Prevents Render Free Tier Spin-Down) ───
+// Pings the server's own /health endpoint every 10 minutes to prevent
+// Render's free tier from spinning down the instance after 15 min of inactivity.
+function startKeepAlive() {
+  // Only auto-ping in production (on Render)
+  const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL; // Render auto-sets this
+  const SELF_URL = RENDER_EXTERNAL_URL || process.env.SELF_URL; // Fallback to manual env var
+
+  if (!SELF_URL) {
+    consoleLog('SYSTEM', 'No RENDER_EXTERNAL_URL or SELF_URL set. Keep-alive self-ping disabled. Set SELF_URL env var to enable.');
+    return;
+  }
+
+  const pingUrl = `${SELF_URL}/health`;
+  const PING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
+  consoleLog('SYSTEM', `🏓 Keep-alive enabled! Pinging ${pingUrl} every 10 minutes.`);
+
+  setInterval(async () => {
+    try {
+      const res = await axios.get(pingUrl, { timeout: 15000 });
+      consoleLog('KEEP-ALIVE', `Self-ping OK — status: ${res.data.status}, uptime: ${Math.round(res.data.uptime)}s`);
+    } catch (err) {
+      consoleLog('KEEP-ALIVE', `Self-ping failed: ${err.message} (server may be restarting)`);
+    }
+  }, PING_INTERVAL_MS);
+}
+
 // Start Server
 app.listen(PORT, () => {
   consoleLog('SYSTEM', `profileyou SaaS Engine running on port ${PORT}`);
@@ -1037,5 +1065,8 @@ app.listen(PORT, () => {
   
   // Trigger auto-subscription
   autoSubscribePage();
+
+  // Start keep-alive self-ping to prevent Render spin-down
+  startKeepAlive();
 });
 
