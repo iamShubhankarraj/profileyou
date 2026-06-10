@@ -348,10 +348,7 @@ app.post('/webhook', async (req, res) => {
                       const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
 
                       const followNudgeMsg = [
-                        `Hey @${commenterUsername}! 👋`,
-                        ``,
-                        `Thanks for commenting! Here is your exclusive link:`,
-                        `👉 ${rule.dm_message}`,
+                        rule.dm_message,
                         ``,
                         `⚠️ Please make sure you are following me @${igUsername} (https://instagram.com/${igUsername}) to keep access! If you do not follow, your link access may be deactivated.`
                       ].join('\n');
