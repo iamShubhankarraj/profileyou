@@ -459,12 +459,13 @@ async function handleInboundDm(senderId, text, token, userId) {
 
 // ── NEW: Handle "Get my link!" button tap — this is where we ACTUALLY check follow status ──
 async function handleUnlockLink(senderId, mediaId, token, userId) {
+  let commenterUsername = senderId;
   try {
     const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
     const recipient = { id: senderId };
     const user = await dbHelper.getUserById(userId);
     const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
-    const commenterUsername = await resolveInstagramUsername(senderId, token);
+    commenterUsername = await resolveInstagramUsername(senderId, token);
 
     // NOW we have the IGSID (senderId from messaging webhook) + consent → follow check works!
     const isFollowing = await checkIfUserFollows(senderId, token);
@@ -484,7 +485,7 @@ async function handleUnlockLink(senderId, mediaId, token, userId) {
     try {
       const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
       consoleLog('WARN', `Follow check failed. Failing open and delivering link to prevent stuck state.`);
-      await deliverLinkOrEmailGate(senderId, senderId, mediaId, rule, token, userId);
+      await deliverLinkOrEmailGate(senderId, commenterUsername, mediaId, rule, token, userId);
     } catch (innerErr) {
       consoleLog('ERROR', `Critical failure in handleUnlockLink fallback: ${innerErr.message}`);
     }
@@ -493,12 +494,13 @@ async function handleUnlockLink(senderId, mediaId, token, userId) {
 
 // ── Handle "I followed!" re-verification button tap ──
 async function handleClaimFollowed(senderId, mediaId, token, userId) {
+  let commenterUsername = senderId;
   try {
     const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
     const recipient = { id: senderId };
     const user = await dbHelper.getUserById(userId);
     const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
-    const commenterUsername = await resolveInstagramUsername(senderId, token);
+    commenterUsername = await resolveInstagramUsername(senderId, token);
 
     const isFollowing = await checkIfUserFollows(senderId, token);
     consoleLog('INFO', `Re-check follow for @${commenterUsername}: ${isFollowing}`);
@@ -520,8 +522,7 @@ async function handleClaimFollowed(senderId, mediaId, token, userId) {
       consoleLog('WARN', `Re-check failed. Failing open and delivering link.`);
       const recipient = { id: senderId };
       await sendInstagramDmDirect(recipient, `Here's your link! 🎉`, token);
-      await sendInstagramDmDirect(recipient, rule.dm_message, token);
-      await dbHelper.logAutomationRun(mediaId, senderId, '[Follow re-check failed - fail-open]', 'SUCCESS', null, userId);
+      await deliverLinkOrEmailGate(senderId, commenterUsername, mediaId, rule, token, userId);
     } catch (innerErr) {
       consoleLog('ERROR', `Critical failure in handleClaimFollowed fallback: ${innerErr.message}`);
     }
@@ -643,8 +644,8 @@ async function checkIfUserFollows(userId, token) {
     consoleLog('WARN', `is_user_follow_business field missing in response. Defaulting to false.`);
     return false;
   } catch (err) {
-    consoleLog('WARN', `Follow check API error: ${err.message}. Defaulting to false.`);
-    return false;
+    consoleLog('WARN', `Follow check API error: ${err.message}.`);
+    throw err; // Throw error to trigger fail-open fallback in caller
   }
 }
 
