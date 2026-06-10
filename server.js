@@ -318,58 +318,84 @@ app.post('/webhook', async (req, res) => {
                     await sendPublicCommentReply(commentId, randomReply, userToken);
                   }
 
-                  // ── FOLLOW CHECK GATE (2-STEP: tap first, then verify via IGSID) ──
+                  const isAppVerified = process.env.META_APP_VERIFIED === 'true';
+
+                  // ── FOLLOW CHECK GATE ──
                   if (rule.ask_for_follow === 1) {
-                    consoleLog('INFO', `Follow gate active. Sending neutral unlock DM to @${commenterUsername} (follow check deferred to button tap).`);
+                    if (isAppVerified) {
+                      consoleLog('INFO', `Follow gate active (Verified Mode). Sending neutral unlock DM to @${commenterUsername}.`);
 
-                    const unlockMsg = [
-                      `Hey @${commenterUsername}! 👋`,
-                      ``,
-                      `Thanks for commenting! Your exclusive link is ready.`,
-                      ``,
-                      `Tap the button below to unlock it! 👇`
-                    ].join('\n');
+                      const unlockMsg = [
+                        `Hey @${commenterUsername}! 👋`,
+                        ``,
+                        `Thanks for commenting! Your exclusive link is ready.`,
+                        ``,
+                        `Tap the button below to unlock it! 👇`
+                      ].join('\n');
 
-                    const quickReplies = [
-                      {
-                        content_type: 'text',
-                        title: 'Get my link!',
-                        payload: `UNLOCK_LINK_${mediaId}`
-                      }
-                    ];
-                    await sendInstagramDm(commentId, unlockMsg, userToken, quickReplies);
-                    await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'UNLOCK_PENDING', 'Awaiting button tap for follow verification', userId);
-                    continue; // ← STOP here, follow check happens on button tap
+                      const quickReplies = [
+                        {
+                          content_type: 'text',
+                          title: 'Get my link!',
+                          payload: `UNLOCK_LINK_${mediaId}`
+                        }
+                      ];
+                      await sendInstagramDm(commentId, unlockMsg, userToken, quickReplies);
+                      await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'UNLOCK_PENDING', 'Awaiting button tap for follow verification', userId);
+                    } else {
+                      consoleLog('INFO', `Follow gate active (Unverified Mode). Sending direct link with follow warning to @${commenterUsername}.`);
+                      const user = await dbHelper.getUserById(userId);
+                      const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
+
+                      const followNudgeMsg = [
+                        `Hey @${commenterUsername}! 👋`,
+                        ``,
+                        `Thanks for commenting! Here is your exclusive link:`,
+                        `👉 ${rule.dm_message}`,
+                        ``,
+                        `⚠️ Please make sure you are following me @${igUsername} (https://instagram.com/${igUsername}) to keep access! If you do not follow, your link access may be deactivated.`
+                      ].join('\n');
+
+                      await sendInstagramDm(commentId, followNudgeMsg, userToken);
+                      await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'SUCCESS', 'Delivered directly with follow warning (unverified app mode)', userId);
+                    }
+                    continue; // ← STOP here, processing completed
                   }
 
                   // ── EMAIL CAPTURE GATE ──
                   if (rule.collect_email === 1) {
-                    const cachedEmail = await dbHelper.getContactEmail(commenterUsername);
-                    
-                    if (cachedEmail) {
-                      consoleLog('INFO', `Email for @${commenterUsername} already cached. Dispatching main DM link.`);
-                      await sendInstagramDm(commentId, rule.dm_message, userToken);
-                      await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'SUCCESS', null, userId);
-                    } else {
-                      consoleLog('INFO', `Email capture active. Setting conversation state to AWAITING_EMAIL.`);
-                      await dbHelper.setConversationState(commenterId || commenterUsername, 'AWAITING_EMAIL', mediaId, userId);
+                    if (isAppVerified) {
+                      const cachedEmail = await dbHelper.getContactEmail(commenterUsername);
                       
-                      const emailPrompt = [
-                        `Hey! Almost there 🎉`,
-                        ``,
-                        `Drop your email address below and I'll send you the exclusive resource right away!`,
-                        ``,
-                        `📧  Just type your email`,
-                        `⏩  Or type "skip" to get the link directly`,
-                      ].join('\n');
-                      const quickReplies = [
-                        {
-                          content_type: 'text',
-                          title: 'Skip & Get Link ⏩',
-                          payload: `SKIP_EMAIL_${mediaId}`
-                        }
-                      ];
-                      await sendInstagramDm(commentId, emailPrompt, userToken, quickReplies);
+                      if (cachedEmail) {
+                        consoleLog('INFO', `Email for @${commenterUsername} already cached. Dispatching main DM link.`);
+                        await sendInstagramDm(commentId, rule.dm_message, userToken);
+                        await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'SUCCESS', null, userId);
+                      } else {
+                        consoleLog('INFO', `Email capture active. Setting conversation state to AWAITING_EMAIL.`);
+                        await dbHelper.setConversationState(commenterId || commenterUsername, 'AWAITING_EMAIL', mediaId, userId);
+                        
+                        const emailPrompt = [
+                          `Hey! Almost there 🎉`,
+                          ``,
+                          `Drop your email address below and I'll send you the exclusive resource right away!`,
+                          ``,
+                          `📧  Just type your email`,
+                          `⏩  Or type "skip" to get the link directly`,
+                        ].join('\n');
+                        const quickReplies = [
+                          {
+                            content_type: 'text',
+                            title: 'Skip & Get Link ⏩',
+                            payload: `SKIP_EMAIL_${mediaId}`
+                          }
+                        ];
+                        await sendInstagramDm(commentId, emailPrompt, userToken, quickReplies);
+                      }
+                    } else {
+                      consoleLog('INFO', `Email capture active (Unverified Mode). Skipping email capture to prevent stuck flow for public users.`);
+                      await sendInstagramDm(commentId, rule.dm_message, userToken);
+                      await dbHelper.logAutomationRun(mediaId, commenterUsername, commentText, 'SUCCESS', 'Delivered directly (skipped email capture in unverified mode)', userId);
                     }
                   } else {
                     // ── STANDARD DM RESPONSE ──
