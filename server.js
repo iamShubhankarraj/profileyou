@@ -315,7 +315,13 @@ app.post('/webhook', async (req, res) => {
                   // ── FOLLOW CHECK GATE ──
                   if (rule.ask_for_follow === 1) {
                     const igUsername = user ? user.ig_username : 'subh.expp';
-                    const isFollowing = await checkIfUserFollows(commenterId, userToken);
+                    let isFollowing = false;
+                    try {
+                      isFollowing = await checkIfUserFollows(commenterId, userToken);
+                    } catch (err) {
+                      consoleLog('WARN', `Initial comment follow check failed (consent/permission error expected): ${err.message}. Defaulting to false (nudge user).`);
+                      isFollowing = false;
+                    }
 
                     if (!isFollowing) {
                       consoleLog('INFO', `@${commenterUsername} is not following. Sending follow nudge message with Quick Reply.`);
@@ -462,7 +468,15 @@ async function handleInboundDm(senderId, text, token, userId) {
 // Handle follow claim triggered by Quick Reply tap
 async function handleClaimFollowed(senderId, mediaId, token, userId) {
   try {
-    const isFollowing = await checkIfUserFollows(senderId, token);
+    let isFollowing = false;
+    let apiError = false;
+    try {
+      isFollowing = await checkIfUserFollows(senderId, token);
+    } catch (err) {
+      consoleLog('WARN', `Follow check API failed on button tap: ${err.message}. Failing open to prevent stuck loop in production!`);
+      isFollowing = true;
+      apiError = true;
+    }
     const rule = await dbHelper.getAutomationForMedia(mediaId, userId);
     const recipient = { id: senderId };
     const user = await dbHelper.getUserById(userId);
@@ -589,8 +603,8 @@ async function checkIfUserFollows(userId, token) {
     consoleLog('WARN', `is_user_follow_business field missing in response. Defaulting to false.`);
     return false; // fail-closed for stricter gatechecking
   } catch (err) {
-    consoleLog('WARN', `Follow check API error: ${err.message}. Defaulting to false (nudge user).`);
-    return false; // Assume not following to trigger nudge flow
+    consoleLog('WARN', `Follow check API error: ${err.message}. throwing error to caller.`);
+    throw err;
   }
 }
 
