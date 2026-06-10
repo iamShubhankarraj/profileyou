@@ -474,15 +474,44 @@ async function handleClaimFollowed(senderId, mediaId, token, userId) {
     const igUsername = user && user.ig_username ? user.ig_username : 'subh.expp';
 
     if (isFollowing) {
-      const successMsg = [
-        `Awesome! Thanks for the follow! 🎉`,
-        ``,
-        `Here is your exclusive link 👇`
-      ].join('\n');
-      
+      // 1. Send follow success confirmation
+      const successMsg = `Awesome! Thanks for the follow! 🎉`;
       await sendInstagramDmDirect(recipient, successMsg, token);
-      await sendInstagramDmDirect(recipient, rule.dm_message, token);
-      await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow - Success]', 'SUCCESS', null, userId);
+
+      // 2. Check if we need to collect email
+      if (rule.collect_email === 1) {
+        const commenterUsername = await resolveInstagramUsername(senderId, token);
+        const cachedEmail = await dbHelper.getContactEmail(commenterUsername);
+
+        if (cachedEmail) {
+          consoleLog('INFO', `Email for @${commenterUsername} already cached. Dispatching DM link.`);
+          await sendInstagramDmDirect(recipient, rule.dm_message, token);
+          await dbHelper.logAutomationRun(mediaId, commenterUsername, '[Follow Verified]', 'SUCCESS', null, userId);
+        } else {
+          consoleLog('INFO', `Email capture active after follow check. Setting conversation state to AWAITING_EMAIL.`);
+          await dbHelper.setConversationState(senderId, 'AWAITING_EMAIL', mediaId, userId);
+
+          const emailPrompt = [
+            `Drop your email address below and I'll send you the details right away!`,
+            ``,
+            `⏩  Or tap the button below to get the link directly`
+          ].join('\n');
+
+          const quickReplies = [
+            {
+              content_type: 'text',
+              title: 'Skip & Get Link ⏩',
+              payload: `SKIP_EMAIL_${mediaId}`
+            }
+          ];
+          await sendInstagramDmDirect(recipient, emailPrompt, token, quickReplies);
+          await dbHelper.logAutomationRun(mediaId, commenterUsername, '[Follow Verified]', 'EMAIL_PENDING', 'Awaiting email address', userId);
+        }
+      } else {
+        // Just send the direct DM link
+        await sendInstagramDmDirect(recipient, rule.dm_message, token);
+        await dbHelper.logAutomationRun(mediaId, senderId, '[Checked follow - Success]', 'SUCCESS', null, userId);
+      }
     } else {
       const stillNudgeMsg = [
         `Hmm, it looks like you are not following yet! 🧐`,
@@ -547,7 +576,7 @@ async function resolveInstagramUsername(userId, token) {
 
 // Check if a user (by IGSID) is following the creator's Instagram account
 async function checkIfUserFollows(userId, token) {
-  if (!userId || !token) return true; // fail-open: send DM if we can't check
+  if (!userId || !token) return false; // Default to false if parameters are missing
 
   try {
     // Query the user profile with the is_user_follow_business field
@@ -560,11 +589,11 @@ async function checkIfUserFollows(userId, token) {
       return isFollowing;
     }
 
-    consoleLog('WARN', `is_user_follow_business field missing in response. Defaulting to true.`);
-    return true; // fail-open
+    consoleLog('WARN', `is_user_follow_business field missing in response. Defaulting to false.`);
+    return false; // fail-closed for stricter gatechecking
   } catch (err) {
-    consoleLog('WARN', `Follow check API error: ${err.message}. Defaulting to fail-open.`);
-    return true; // fail-open: don't block DMs if the API is having issues
+    consoleLog('WARN', `Follow check API error: ${err.message}. Defaulting to false (nudge user).`);
+    return false; // Assume not following to trigger nudge flow
   }
 }
 
